@@ -1,0 +1,20 @@
+package com.paysms.data.model
+
+data class AppSettings(
+    val apiUrl: String = "",
+    val apiMethod: String = "POST",
+    val apiHeaders: Map<String, String> = emptyMap(),
+    val apiKey: String = "",
+    val apiEnabled: Boolean = false,
+    val emailEnabled: Boolean = false,
+    val senderEmail: String = "",
+    val senderPassword: String = "",
+    val receiverEmail: String = "",
+    val smtpHost: String = "smtp.gmail.com",
+    val smtpPort: Int = 587,
+    val allowedSenders: List<String> = emptyList(),
+    val keywords: List<String> = listOf("credited", "received", "transfer", "deposited"),
+    val aiEnabled: Boolean = false,
+    val aiConfidenceThreshold: Float = 0.8f,
+    val notificationsEnabled: Boolean = true
+)
