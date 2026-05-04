@@ -38,6 +38,14 @@ class SettingsManager(private val context: Context) {
         val AI_ENABLED = booleanPreferencesKey("ai_enabled")
         val AI_CONFIDENCE = floatPreferencesKey("ai_confidence")
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val AUTO_SEND_API = booleanPreferencesKey("auto_send_api")
+        val AUTO_SEND_EMAIL = booleanPreferencesKey("auto_send_email")
+        val DATA_RETENTION_DAYS = intPreferencesKey("data_retention_days")
+        val EXPORT_FORMAT = stringPreferencesKey("export_format")
+        val DARK_MODE = stringPreferencesKey("dark_mode")
+        val WHITELIST_ENABLED = booleanPreferencesKey("whitelist_enabled")
+        val WHITELISTED_SENDERS = stringPreferencesKey("whitelisted_senders")
+        val BLACKLISTED_SENDERS = stringPreferencesKey("blacklisted_senders")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -63,7 +71,19 @@ class SettingsManager(private val context: Context) {
             } ?: listOf("credited", "received", "transfer", "deposited"),
             aiEnabled = prefs[Keys.AI_ENABLED] ?: false,
             aiConfidenceThreshold = prefs[Keys.AI_CONFIDENCE] ?: 0.8f,
-            notificationsEnabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: true
+            notificationsEnabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: true,
+            autoSendApi = prefs[Keys.AUTO_SEND_API] ?: true,
+            autoSendEmail = prefs[Keys.AUTO_SEND_EMAIL] ?: true,
+            dataRetentionDays = prefs[Keys.DATA_RETENTION_DAYS] ?: 90,
+            exportFormat = prefs[Keys.EXPORT_FORMAT] ?: "CSV",
+            darkMode = prefs[Keys.DARK_MODE] ?: "system",
+            whitelistEnabled = prefs[Keys.WHITELIST_ENABLED] ?: false,
+            whitelistedSenders = prefs[Keys.WHITELISTED_SENDERS]?.let {
+                gson.fromJson<List<String>>(it, object : TypeToken<List<String>>() {}.type)
+            } ?: emptyList(),
+            blacklistedSenders = prefs[Keys.BLACKLISTED_SENDERS]?.let {
+                gson.fromJson<List<String>>(it, object : TypeToken<List<String>>() {}.type)
+            } ?: emptyList()
         )
     }
 
@@ -85,6 +105,14 @@ class SettingsManager(private val context: Context) {
             prefs[Keys.AI_ENABLED] = settings.aiEnabled
             prefs[Keys.AI_CONFIDENCE] = settings.aiConfidenceThreshold
             prefs[Keys.NOTIFICATIONS_ENABLED] = settings.notificationsEnabled
+            prefs[Keys.AUTO_SEND_API] = settings.autoSendApi
+            prefs[Keys.AUTO_SEND_EMAIL] = settings.autoSendEmail
+            prefs[Keys.DATA_RETENTION_DAYS] = settings.dataRetentionDays
+            prefs[Keys.EXPORT_FORMAT] = settings.exportFormat
+            prefs[Keys.DARK_MODE] = settings.darkMode
+            prefs[Keys.WHITELIST_ENABLED] = settings.whitelistEnabled
+            prefs[Keys.WHITELISTED_SENDERS] = gson.toJson(settings.whitelistedSenders)
+            prefs[Keys.BLACKLISTED_SENDERS] = gson.toJson(settings.blacklistedSenders)
         }
     }
 }

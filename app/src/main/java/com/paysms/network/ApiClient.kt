@@ -12,7 +12,9 @@ import java.util.concurrent.TimeUnit
 data class ApiResponse(
     val success: Boolean,
     val statusCode: Int,
-    val body: String
+    val body: String,
+    val requestPayload: String = "",
+    val responseTimeMs: Long = 0
 )
 
 class ApiClient {
@@ -25,6 +27,7 @@ class ApiClient {
 
     suspend fun sendTransaction(payload: String, settings: AppSettings): ApiResponse {
         return withContext(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
             try {
                 val requestBuilder = Request.Builder().url(settings.apiUrl)
 
@@ -57,18 +60,29 @@ class ApiClient {
                 }
 
                 val response = client.newCall(requestBuilder.build()).execute()
+                val elapsed = System.currentTimeMillis() - startTime
                 ApiResponse(
                     success = response.isSuccessful,
                     statusCode = response.code,
-                    body = response.body?.string() ?: ""
+                    body = response.body?.string() ?: "",
+                    requestPayload = payload,
+                    responseTimeMs = elapsed
                 )
             } catch (e: Exception) {
+                val elapsed = System.currentTimeMillis() - startTime
                 ApiResponse(
                     success = false,
                     statusCode = -1,
-                    body = e.message ?: "Unknown error"
+                    body = e.message ?: "Unknown error",
+                    requestPayload = payload,
+                    responseTimeMs = elapsed
                 )
             }
         }
+    }
+
+    suspend fun testConnection(settings: AppSettings): ApiResponse {
+        val testPayload = """{"test": true, "source": "PaySMS", "timestamp": ${System.currentTimeMillis()}}"""
+        return sendTransaction(testPayload, settings)
     }
 }

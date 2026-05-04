@@ -42,6 +42,22 @@ class SmsReceiver : BroadcastReceiver() {
             for ((sender, bodyBuilder) in smsMap) {
                 val body = bodyBuilder.toString()
 
+                // Whitelist/blacklist check
+                if (settings.whitelistEnabled && settings.whitelistedSenders.isNotEmpty()) {
+                    val allowed = settings.whitelistedSenders.any {
+                        sender.contains(it, ignoreCase = true)
+                    }
+                    if (!allowed) continue
+                }
+
+                if (settings.blacklistedSenders.isNotEmpty()) {
+                    val blocked = settings.blacklistedSenders.any {
+                        sender.contains(it, ignoreCase = true)
+                    }
+                    if (blocked) continue
+                }
+
+                // Legacy allowed senders check
                 if (settings.allowedSenders.isNotEmpty()) {
                     val allowed = settings.allowedSenders.any {
                         sender.contains(it, ignoreCase = true)
@@ -56,7 +72,27 @@ class SmsReceiver : BroadcastReceiver() {
 
                 if (repository.isDuplicate(parsed.smsHash)) continue
 
-                val transaction = parser.toTransaction(parsed)
+                val apiPayload = gson.toJson(
+                    mapOf(
+                        "amount" to parsed.amount,
+                        "currency" to parsed.currency,
+                        "sender" to parsed.senderName,
+                        "bank" to parsed.bankName,
+                        "account" to parsed.accountNumber,
+                        "type" to parsed.transactionType.name,
+                        "timestamp" to parsed.timestamp,
+                        "transactionRef" to parsed.transactionRef,
+                        "smsSender" to parsed.smsSenderNumber,
+                        "balance" to parsed.balance
+                    )
+                )
+
+                val emailBodyText = buildEmailBody(parsed)
+
+                val transaction = parser.toTransaction(parsed).copy(
+                    apiRequestPayload = apiPayload,
+                    emailBody = emailBodyText
+                )
                 val transactionId = repository.insertTransaction(transaction)
 
                 if (settings.notificationsEnabled) {
@@ -66,32 +102,21 @@ class SmsReceiver : BroadcastReceiver() {
                     )
                 }
 
-                if (settings.apiEnabled && settings.apiUrl.isNotEmpty()) {
-                    val payload = gson.toJson(
-                        mapOf(
-                            "amount" to transaction.amount,
-                            "currency" to transaction.currency,
-                            "sender" to transaction.senderName,
-                            "bank" to transaction.bankName,
-                            "account" to transaction.accountNumber,
-                            "type" to transaction.transactionType.name,
-                            "timestamp" to transaction.timestamp
-                        )
-                    )
+                if (settings.apiEnabled && settings.autoSendApi && settings.apiUrl.isNotEmpty()) {
                     repository.insertPendingRequest(
                         PendingRequest(
                             transactionId = transactionId,
                             requestType = RequestType.API_CALL,
-                            payload = payload
+                            payload = apiPayload
                         )
                     )
                 }
 
-                if (settings.emailEnabled && settings.receiverEmail.isNotEmpty()) {
+                if (settings.emailEnabled && settings.autoSendEmail && settings.receiverEmail.isNotEmpty()) {
                     val emailPayload = gson.toJson(
                         mapOf(
-                            "subject" to "Payment Received: ${transaction.currency} ${transaction.amount}",
-                            "body" to buildEmailBody(transaction)
+                            "subject" to "Payment Received: ${parsed.currency} ${String.format("%.2f", parsed.amount)}",
+                            "body" to emailBodyText
                         )
                     )
                     repository.insertPendingRequest(
@@ -108,16 +133,24 @@ class SmsReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun buildEmailBody(transaction: com.paysms.data.model.Transaction): String {
-        return """
-            Payment Received!
-            
-            Amount: ${transaction.currency} ${transaction.amount}
-            From: ${transaction.senderName}
-            Bank: ${transaction.bankName}
-            Account: ${transaction.accountNumber}
-            Type: ${transaction.transactionType}
-            Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(transaction.timestamp))}
-        """.trimIndent()
+    private fun buildEmailBody(parsed: ParsedTransaction): String {
+        val df = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+        return buildString {
+            appendLine("Payment Received!")
+            appendLine()
+            appendLine("Amount: ${parsed.currency} ${String.format("%.2f", parsed.amount)}")
+            appendLine("From: ${parsed.senderName}")
+            appendLine("Bank: ${parsed.bankName}")
+            appendLine("Account: ${parsed.accountNumber}")
+            appendLine("Type: ${parsed.transactionType}")
+            appendLine("Time: ${df.format(java.util.Date(parsed.timestamp))}")
+            if (parsed.transactionRef.isNotEmpty()) {
+                appendLine("Ref: ${parsed.transactionRef}")
+            }
+            if (parsed.balance.isNotEmpty()) {
+                appendLine("Balance: ${parsed.balance}")
+            }
+            appendLine("SMS Sender: ${parsed.smsSenderNumber}")
+        }
     }
 }

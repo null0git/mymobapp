@@ -17,17 +17,10 @@ data class AnalyticsState(
     val totalSent: Double = 0.0,
     val transactionCount: Int = 0,
     val averageTransaction: Double = 0.0,
-    val weeklyData: List<Pair<String, Double>> = emptyList(),
-    val monthlyData: List<Pair<String, Double>> = emptyList(),
+    val dailyData: List<Pair<String, Double>> = emptyList(),
     val bankDistribution: List<Pair<String, Double>> = emptyList(),
-    val selectedPeriod: TimePeriod = TimePeriod.WEEK
+    val selectedPeriod: String = "week"
 )
-
-enum class TimePeriod(val label: String) {
-    WEEK("Week"),
-    MONTH("Month"),
-    ALL("All Time")
-}
 
 class AnalyticsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -41,7 +34,7 @@ class AnalyticsViewModel(application: Application) : AndroidViewModel(applicatio
         loadAnalytics()
     }
 
-    fun onPeriodSelected(period: TimePeriod) {
+    fun setPeriod(period: String) {
         _state.value = _state.value.copy(selectedPeriod = period)
         loadAnalytics()
     }
@@ -49,9 +42,9 @@ class AnalyticsViewModel(application: Application) : AndroidViewModel(applicatio
     private fun loadAnalytics() {
         viewModelScope.launch {
             val startTime = when (_state.value.selectedPeriod) {
-                TimePeriod.WEEK -> DateUtils.getDaysAgo(7)
-                TimePeriod.MONTH -> DateUtils.getStartOfMonth()
-                TimePeriod.ALL -> 0L
+                "week" -> DateUtils.getDaysAgo(7)
+                "month" -> DateUtils.getStartOfMonth()
+                else -> 0L
             }
 
             repository.getAllTransactions().collectLatest { allTransactions ->
@@ -71,21 +64,21 @@ class AnalyticsViewModel(application: Application) : AndroidViewModel(applicatio
                     .map { (bank, txns) -> bank to txns.sumOf { it.amount } }
                     .sortedByDescending { it.second }
 
-                val weeklyData = buildWeeklyData(allTransactions)
+                val dailyData = buildDailyData(allTransactions)
 
                 _state.value = _state.value.copy(
                     totalReceived = totalReceived,
                     totalSent = totalSent,
                     transactionCount = filtered.size,
                     averageTransaction = if (credits.isNotEmpty()) totalReceived / credits.size else 0.0,
-                    weeklyData = weeklyData,
+                    dailyData = dailyData,
                     bankDistribution = bankDist
                 )
             }
         }
     }
 
-    private fun buildWeeklyData(transactions: List<Transaction>): List<Pair<String, Double>> {
+    private fun buildDailyData(transactions: List<Transaction>): List<Pair<String, Double>> {
         val result = mutableListOf<Pair<String, Double>>()
         for (i in 6 downTo 0) {
             val dayStart = DateUtils.getDaysAgo(i)

@@ -11,7 +11,7 @@ import com.paysms.data.model.Transaction
 
 @Database(
     entities = [Transaction::class, PendingRequest::class, BankRule::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

@@ -1,5 +1,3 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-
 package com.paysms.ui.analytics
 
 import androidx.compose.foundation.background
@@ -12,13 +10,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,18 +32,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.paysms.ui.theme.ChartBlue
 import com.paysms.ui.theme.ChartOrange
+import com.paysms.ui.theme.ChartPink
 import com.paysms.ui.theme.ChartPurple
 import com.paysms.ui.theme.ChartTeal
 import com.paysms.ui.theme.CreditGreen
 import com.paysms.ui.theme.DebitRed
 import com.paysms.util.CurrencyUtils
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(viewModel: AnalyticsViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
@@ -46,44 +55,55 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel = viewModel()) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+
         item {
             Text(
                 text = "Analytics",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Transaction insights",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
         }
 
+        // Period selector
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TimePeriod.entries.forEach { period ->
+                listOf("Week" to "week", "Month" to "month", "All" to "all").forEach { (label, value) ->
                     FilterChip(
-                        selected = state.selectedPeriod == period,
-                        onClick = { viewModel.onPeriodSelected(period) },
-                        label = { Text(period.label) }
+                        selected = state.selectedPeriod == value,
+                        onClick = { viewModel.setPeriod(value) },
+                        label = { Text(label) }
                     )
                 }
             }
         }
 
+        // Stats cards
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                SummaryCard(
+                AnalyticsStatCard(
                     modifier = Modifier.weight(1f),
                     title = "Total Received",
-                    value = CurrencyUtils.formatAmount(state.totalReceived),
+                    value = CurrencyUtils.formatAmountShort(state.totalReceived),
+                    icon = Icons.Filled.ArrowDownward,
                     color = CreditGreen
                 )
-                SummaryCard(
+                AnalyticsStatCard(
                     modifier = Modifier.weight(1f),
                     title = "Total Sent",
-                    value = CurrencyUtils.formatAmount(state.totalSent),
+                    value = CurrencyUtils.formatAmountShort(state.totalSent),
+                    icon = Icons.Filled.ArrowUpward,
                     color = DebitRed
                 )
             }
@@ -94,62 +114,68 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel = viewModel()) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                SummaryCard(
+                AnalyticsStatCard(
                     modifier = Modifier.weight(1f),
                     title = "Transactions",
                     value = "${state.transactionCount}",
+                    icon = Icons.Filled.CalendarMonth,
                     color = ChartBlue
                 )
-                SummaryCard(
+                AnalyticsStatCard(
                     modifier = Modifier.weight(1f),
-                    title = "Avg. Amount",
-                    value = CurrencyUtils.formatAmount(state.averageTransaction),
+                    title = "Net Amount",
+                    value = CurrencyUtils.formatAmountShort(state.totalReceived - state.totalSent),
+                    icon = Icons.Filled.TrendingUp,
                     color = ChartPurple
                 )
             }
         }
 
-        if (state.weeklyData.isNotEmpty()) {
+        // Daily chart
+        if (state.dailyData.isNotEmpty()) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(20.dp)) {
                         Text(
-                            text = "Daily Income (Last 7 days)",
+                            text = "Daily Income",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        BarChart(data = state.weeklyData)
+                        AnalyticsBarChart(data = state.dailyData)
                     }
                 }
             }
         }
 
+        // Bank distribution
         if (state.bankDistribution.isNotEmpty()) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(20.dp)) {
                         Text(
-                            text = "Income by Bank",
+                            text = "Bank Distribution",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         val total = state.bankDistribution.sumOf { it.second }
-                        val colors = listOf(ChartBlue, ChartOrange, ChartPurple, ChartTeal, CreditGreen)
+                        val bankColors = listOf(ChartBlue, ChartOrange, ChartPurple, ChartTeal, ChartPink, CreditGreen)
 
                         state.bankDistribution.forEachIndexed { index, (bank, amount) ->
-                            val color = colors[index % colors.size]
-                            val percentage = if (total > 0) (amount / total * 100) else 0.0
+                            val pct = if (total > 0) (amount / total * 100) else 0.0
+                            val color = bankColors[index % bankColors.size]
 
                             Row(
                                 modifier = Modifier
@@ -157,33 +183,45 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel = viewModel()) {
                                     .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = bank,
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                        Text(
-                                            text = "${CurrencyUtils.formatAmount(amount)} (${String.format("%.1f", percentage)}%)",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    @Suppress("DEPRECATION")
-                                    LinearProgressIndicator(
-                                        progress = (percentage / 100).toFloat(),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(8.dp)
-                                            .clip(RoundedCornerShape(4.dp)),
-                                        color = color,
-                                        trackColor = color.copy(alpha = 0.15f)
-                                    )
-                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = bank,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = "${String.format("%.1f", pct)}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = CurrencyUtils.formatAmount(amount),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            // Progress bar
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction = (pct / 100f).toFloat().coerceIn(0f, 1f))
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(color)
+                                )
                             }
                         }
                     }
@@ -196,29 +234,45 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel = viewModel()) {
 }
 
 @Composable
-private fun SummaryCard(
+private fun AnalyticsStatCard(
     modifier: Modifier = Modifier,
     title: String,
     value: String,
-    color: androidx.compose.ui.graphics.Color
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color
 ) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(color.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = color,
                 maxLines = 1
             )
         }
@@ -226,13 +280,13 @@ private fun SummaryCard(
 }
 
 @Composable
-private fun BarChart(data: List<Pair<String, Double>>) {
+private fun AnalyticsBarChart(data: List<Pair<String, Double>>) {
     val maxValue = data.maxOfOrNull { it.second } ?: 1.0
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp),
+            .height(120.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Bottom
     ) {
@@ -247,23 +301,27 @@ private fun BarChart(data: List<Pair<String, Double>>) {
                         text = CurrencyUtils.formatAmountShort(value),
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                 }
                 Box(
                     modifier = Modifier
                         .width(28.dp)
-                        .height(((value / maxValue) * 100).dp.coerceAtLeast(4.dp))
-                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                        .background(ChartBlue)
+                        .height(((value / maxValue) * 80).dp.coerceAtLeast(4.dp))
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(CreditGreen, CreditGreen.copy(alpha = 0.6f))
+                            )
+                        )
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 9.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
         }

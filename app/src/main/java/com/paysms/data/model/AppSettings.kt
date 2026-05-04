@@ -16,5 +16,13 @@ data class AppSettings(
     val keywords: List<String> = listOf("credited", "received", "transfer", "deposited"),
     val aiEnabled: Boolean = false,
     val aiConfidenceThreshold: Float = 0.8f,
-    val notificationsEnabled: Boolean = true
+    val notificationsEnabled: Boolean = true,
+    val autoSendApi: Boolean = true,
+    val autoSendEmail: Boolean = true,
+    val dataRetentionDays: Int = 90,
+    val exportFormat: String = "CSV",
+    val darkMode: String = "system",
+    val whitelistEnabled: Boolean = false,
+    val whitelistedSenders: List<String> = emptyList(),
+    val blacklistedSenders: List<String> = emptyList()
 )

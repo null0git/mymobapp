@@ -20,7 +20,12 @@ data class Transaction(
     val apiSent: Boolean = false,
     val emailSent: Boolean = false,
     val apiResponse: String = "",
-    val apiStatusCode: Int = 0
+    val apiStatusCode: Int = 0,
+    val transactionRef: String = "",
+    val smsSenderNumber: String = "",
+    val apiRequestPayload: String = "",
+    val emailBody: String = "",
+    val balance: String = ""
 )
 
 enum class TransactionType {

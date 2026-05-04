@@ -15,8 +15,10 @@ private val LightColorScheme = lightColorScheme(
     primary = Primary,
     onPrimary = OnPrimary,
     secondary = Secondary,
+    tertiary = Tertiary,
     background = Background,
     surface = Surface,
+    surfaceVariant = SurfaceVariant,
     onBackground = OnBackground,
     onSurface = OnSurface,
     error = Error
@@ -26,8 +28,10 @@ private val DarkColorScheme = darkColorScheme(
     primary = PrimaryLight,
     onPrimary = OnPrimary,
     secondary = Secondary,
+    tertiary = Tertiary,
     background = BackgroundDark,
     surface = SurfaceDark,
+    surfaceVariant = SurfaceDark,
     onBackground = OnBackgroundDark,
     onSurface = OnSurfaceDark,
     error = Error
@@ -43,7 +47,7 @@ fun PaySmsTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
+            window.statusBarColor = colorScheme.background.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

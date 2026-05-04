@@ -15,54 +15,31 @@ data class ParsedTransaction(
     val timestamp: Long,
     val rawSms: String,
     val smsSender: String,
-    val smsHash: String
+    val smsHash: String,
+    val transactionRef: String = "",
+    val smsSenderNumber: String = "",
+    val balance: String = ""
 )
 
-/**
- * Bank-specific parser definition.
- *
- * To add a new bank, simply create a new BankPattern and add it to [SmsParser.BANK_PATTERNS].
- * Each BankPattern defines:
- *   - How to identify the bank (keywords in SMS sender or body)
- *   - How to extract the amount
- *   - How to extract the sender/payer name
- *   - How to extract the account number
- *   - How to detect credit vs debit
- *
- * The parser tries each bank pattern in order and uses the first one that matches.
- */
 data class BankPattern(
     val bankName: String,
-    /** Keywords to match against the SMS sender address or SMS body to identify this bank */
     val identifyKeywords: List<String>,
-    /** Regex patterns to extract the amount (first capturing group = amount string) */
     val amountPatterns: List<Regex>,
-    /** Regex patterns to extract the sender/payer name (first capturing group = name) */
     val senderNamePatterns: List<Regex>,
-    /** Regex patterns to extract the account number (first capturing group = account) */
     val accountPatterns: List<Regex>,
-    /** Keywords that indicate a CREDIT transaction */
     val creditKeywords: List<String>,
-    /** Keywords that indicate a DEBIT transaction */
-    val debitKeywords: List<String>
+    val debitKeywords: List<String>,
+    val transactionRefPatterns: List<Regex> = emptyList(),
+    val balancePatterns: List<Regex> = emptyList()
 )
 
 class SmsParser {
 
     companion object {
 
-        // =====================================================================
-        //  BANK PATTERNS — Add new banks here
-        //  Each entry defines how to identify and parse SMS from that bank.
-        //  The parser tries each pattern in order; first match wins.
-        // =====================================================================
-
         val BANK_PATTERNS: List<BankPattern> = listOf(
 
-            // ── Abay Bank ────────────────────────────────────────────────
-            // Example: "Dear Customer, Account to account transfer was made
-            //   to account ****1016 from AMINET SEID by ETB 2,000.00 on
-            //   2026-04-25. Your current balance is 2,605.35."
+            // Abay Bank
             BankPattern(
                 bankName = "Abay Bank",
                 identifyKeywords = listOf("Abay Bank", "AbayBank", "abaymobile"),
@@ -78,13 +55,17 @@ class SmsParser {
                     Regex("account\\s+([*\\d]+)", RegexOption.IGNORE_CASE)
                 ),
                 creditKeywords = listOf("transfer was made to account", "credited", "received", "deposited"),
-                debitKeywords = listOf("transfer was made from account", "debited", "sent", "withdrawn")
+                debitKeywords = listOf("transfer was made from account", "debited", "sent", "withdrawn"),
+                transactionRefPatterns = listOf(
+                    Regex("info/([A-Z0-9]+)", RegexOption.IGNORE_CASE),
+                    Regex("FT[A-Z0-9]+", RegexOption.IGNORE_CASE)
+                ),
+                balancePatterns = listOf(
+                    Regex("current\\s+balance\\s+is\\s+([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+                )
             ),
 
-            // ── Bank of Abyssinia (BOA) ──────────────────────────────────
-            // Example: "Dear Amir, your account 2*65 was credited with
-            //   ETB 1,000.00 by Reshid Endris Jibril. Available Balance:
-            //   ETB 1,351.11."
+            // Bank of Abyssinia (BOA)
             BankPattern(
                 bankName = "Bank of Abyssinia",
                 identifyKeywords = listOf("Bank of Abyssinia", "bankofabyssinia", "BOA"),
@@ -101,14 +82,17 @@ class SmsParser {
                     Regex("account\\s+([\\d*]+)", RegexOption.IGNORE_CASE)
                 ),
                 creditKeywords = listOf("credited"),
-                debitKeywords = listOf("debited")
+                debitKeywords = listOf("debited"),
+                transactionRefPatterns = listOf(
+                    Regex("trx=([A-Z0-9]+)", RegexOption.IGNORE_CASE),
+                    Regex("FT[A-Z0-9]+", RegexOption.IGNORE_CASE)
+                ),
+                balancePatterns = listOf(
+                    Regex("Available\\s+Balance:\\s+ETB\\s+([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+                )
             ),
 
-            // ── Dashen Bank ──────────────────────────────────────────────
-            // Example: "Dear Customer, your account 2905****811 has been
-            //   credited with ETB 40,000.00 from NYAKER JOCK  YUAL on
-            //   2026-02-23 at 03:29:35. Your current balance is ETB
-            //   742,029.27."
+            // Dashen Bank
             BankPattern(
                 bankName = "Dashen Bank",
                 identifyKeywords = listOf("Dashen", "DashenBank", "Dashen Super App"),
@@ -125,13 +109,16 @@ class SmsParser {
                     Regex("account\\s+([\\d*]+)", RegexOption.IGNORE_CASE)
                 ),
                 creditKeywords = listOf("credited"),
-                debitKeywords = listOf("debited")
+                debitKeywords = listOf("debited"),
+                transactionRefPatterns = listOf(
+                    Regex("Ref[\\s:]*([A-Z0-9]+)", RegexOption.IGNORE_CASE)
+                ),
+                balancePatterns = listOf(
+                    Regex("current\\s+balance\\s+is\\s+ETB\\s+([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+                )
             ),
 
-            // ── Commercial Bank of Ethiopia (CBE) ────────────────────────
-            // Example: "Dear Furniture your Account 1*****6499 has been
-            //   Credited with ETB 150,000.00 from Firebizu Ayele, on
-            //   25/10/2025 at 18:46:27 with Ref No FT252981N5ZG"
+            // Commercial Bank of Ethiopia (CBE)
             BankPattern(
                 bankName = "Commercial Bank of Ethiopia",
                 identifyKeywords = listOf("CBE", "cbe.com.et", "Banking with CBE"),
@@ -147,10 +134,17 @@ class SmsParser {
                     Regex("(?:your\\s+)?Account\\s+([\\d*]+)", RegexOption.IGNORE_CASE)
                 ),
                 creditKeywords = listOf("Credited"),
-                debitKeywords = listOf("Debited")
+                debitKeywords = listOf("Debited"),
+                transactionRefPatterns = listOf(
+                    Regex("Ref\\s+No\\s+([A-Z0-9]+)", RegexOption.IGNORE_CASE),
+                    Regex("\\?id=([A-Z0-9]+)", RegexOption.IGNORE_CASE)
+                ),
+                balancePatterns = listOf(
+                    Regex("Current\\s+Balance\\s+is\\s+ETB\\s+([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+                )
             ),
 
-            // ── Telebirr ────────────────────────────────────────────────
+            // Telebirr
             BankPattern(
                 bankName = "Telebirr",
                 identifyKeywords = listOf("Telebirr", "ethio telecom", "127"),
@@ -167,10 +161,16 @@ class SmsParser {
                     Regex("account[:\\s]*([*\\d]+)", RegexOption.IGNORE_CASE)
                 ),
                 creditKeywords = listOf("received", "credited", "sent to you", "deposited"),
-                debitKeywords = listOf("sent", "paid", "transferred", "debited")
+                debitKeywords = listOf("sent", "paid", "transferred", "debited"),
+                transactionRefPatterns = listOf(
+                    Regex("Ref[:\\s]*([A-Z0-9]+)", RegexOption.IGNORE_CASE)
+                ),
+                balancePatterns = listOf(
+                    Regex("balance[:\\s]*(?:ETB|Birr)?\\s*([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+                )
             ),
 
-            // ── Awash Bank ──────────────────────────────────────────────
+            // Awash Bank
             BankPattern(
                 bankName = "Awash Bank",
                 identifyKeywords = listOf("Awash", "AwashBank"),
@@ -186,10 +186,16 @@ class SmsParser {
                     Regex("account\\s+([*\\d]+)", RegexOption.IGNORE_CASE)
                 ),
                 creditKeywords = listOf("credited", "received", "deposited"),
-                debitKeywords = listOf("debited", "sent", "withdrawn")
+                debitKeywords = listOf("debited", "sent", "withdrawn"),
+                transactionRefPatterns = listOf(
+                    Regex("Ref[:\\s]*([A-Z0-9]+)", RegexOption.IGNORE_CASE)
+                ),
+                balancePatterns = listOf(
+                    Regex("balance[:\\s]*(?:ETB)?\\s*([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+                )
             ),
 
-            // ── Wegagen Bank ────────────────────────────────────────────
+            // Wegagen Bank
             BankPattern(
                 bankName = "Wegagen Bank",
                 identifyKeywords = listOf("Wegagen"),
@@ -205,10 +211,16 @@ class SmsParser {
                     Regex("account\\s+([*\\d]+)", RegexOption.IGNORE_CASE)
                 ),
                 creditKeywords = listOf("credited", "received", "deposited"),
-                debitKeywords = listOf("debited", "sent", "withdrawn")
+                debitKeywords = listOf("debited", "sent", "withdrawn"),
+                transactionRefPatterns = listOf(
+                    Regex("Ref[:\\s]*([A-Z0-9]+)", RegexOption.IGNORE_CASE)
+                ),
+                balancePatterns = listOf(
+                    Regex("balance[:\\s]*(?:ETB)?\\s*([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+                )
             ),
 
-            // ── Cooperative Bank of Oromia ───────────────────────────────
+            // Cooperative Bank of Oromia
             BankPattern(
                 bankName = "Cooperative Bank of Oromia",
                 identifyKeywords = listOf("CoopBank", "Oromia", "Cooperative Bank"),
@@ -224,11 +236,16 @@ class SmsParser {
                     Regex("account\\s+([*\\d]+)", RegexOption.IGNORE_CASE)
                 ),
                 creditKeywords = listOf("credited", "received", "deposited"),
-                debitKeywords = listOf("debited", "sent", "withdrawn")
+                debitKeywords = listOf("debited", "sent", "withdrawn"),
+                transactionRefPatterns = listOf(
+                    Regex("Ref[:\\s]*([A-Z0-9]+)", RegexOption.IGNORE_CASE)
+                ),
+                balancePatterns = listOf(
+                    Regex("balance[:\\s]*(?:ETB)?\\s*([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+                )
             )
         )
 
-        // Generic fallback patterns used when no bank-specific pattern matches
         private val GENERIC_AMOUNT_PATTERNS = listOf(
             Regex("ETB\\s+([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE),
             Regex("([\\d,]+\\.?\\d*)\\s+ETB", RegexOption.IGNORE_CASE),
@@ -248,34 +265,33 @@ class SmsParser {
             Regex("acct[:\\s]*([*\\d]+)", RegexOption.IGNORE_CASE)
         )
 
+        private val GENERIC_REF_PATTERNS = listOf(
+            Regex("Ref\\s*(?:No)?[:\\s]*([A-Z0-9]{6,})", RegexOption.IGNORE_CASE),
+            Regex("FT[A-Z0-9]{8,}", RegexOption.IGNORE_CASE),
+            Regex("\\?(?:id|trx|ref)=([A-Z0-9]+)", RegexOption.IGNORE_CASE)
+        )
+
+        private val GENERIC_BALANCE_PATTERNS = listOf(
+            Regex("(?:current|available)?\\s*balance[:\\s]*(?:is)?\\s*(?:ETB)?\\s*([\\d,]+\\.?\\d*)", RegexOption.IGNORE_CASE)
+        )
+
         private val TRANSACTION_KEYWORDS = listOf(
             "credited", "debited", "received", "sent", "transferred",
             "deposited", "withdrawn", "payment", "balance", "ETB", "Birr"
         )
     }
 
-    /**
-     * Parse an SMS message and extract transaction details.
-     *
-     * @param smsBody The full text of the SMS message
-     * @param smsSender The sender address/number of the SMS
-     * @param customRules Optional user-defined bank rules from the database
-     * @return ParsedTransaction if the SMS is a valid transaction, null otherwise
-     */
     fun parse(smsBody: String, smsSender: String, customRules: List<BankRule> = emptyList()): ParsedTransaction? {
-        // 1) Try user-defined custom rules first
         for (rule in customRules.filter { it.isEnabled }) {
             val result = tryCustomRule(smsBody, smsSender, rule)
             if (result != null) return result
         }
 
-        // 2) Try built-in bank patterns
         for (pattern in BANK_PATTERNS) {
             val result = tryBankPattern(smsBody, smsSender, pattern)
             if (result != null) return result
         }
 
-        // 3) Fallback: generic parsing for unknown banks
         if (looksLikeTransaction(smsBody)) {
             return tryGenericParse(smsBody, smsSender)
         }
@@ -294,11 +310,12 @@ class SmsParser {
             timestamp = parsed.timestamp,
             rawSms = parsed.rawSms,
             smsSender = parsed.smsSender,
-            smsHash = parsed.smsHash
+            smsHash = parsed.smsHash,
+            transactionRef = parsed.transactionRef,
+            smsSenderNumber = parsed.smsSenderNumber,
+            balance = parsed.balance
         )
     }
-
-    // ─── Bank pattern matching ───────────────────────────────────────────
 
     private fun tryBankPattern(smsBody: String, smsSender: String, pattern: BankPattern): ParsedTransaction? {
         val combined = "$smsSender $smsBody"
@@ -309,6 +326,8 @@ class SmsParser {
         val senderName = extractFirst(smsBody, pattern.senderNamePatterns)?.trim() ?: "Unknown"
         val account = extractFirst(smsBody, pattern.accountPatterns) ?: ""
         val type = detectType(smsBody, pattern.creditKeywords, pattern.debitKeywords)
+        val ref = extractRef(smsBody, pattern.transactionRefPatterns)
+        val balance = extractFirst(smsBody, pattern.balancePatterns.ifEmpty { GENERIC_BALANCE_PATTERNS }) ?: ""
 
         return ParsedTransaction(
             amount = parseAmount(amount),
@@ -320,11 +339,12 @@ class SmsParser {
             timestamp = System.currentTimeMillis(),
             rawSms = smsBody,
             smsSender = smsSender,
-            smsHash = generateHash(smsBody, smsSender)
+            smsHash = generateHash(smsBody, smsSender),
+            transactionRef = ref,
+            smsSenderNumber = smsSender,
+            balance = if (balance.isNotEmpty()) "ETB ${formatBalance(balance)}" else ""
         )
     }
-
-    // ─── Custom rule matching (user-defined via Settings) ────────────────
 
     private fun tryCustomRule(smsBody: String, smsSender: String, rule: BankRule): ParsedTransaction? {
         val combined = "$smsSender $smsBody"
@@ -346,6 +366,8 @@ class SmsParser {
         val creditKw = rule.creditKeywords.split(",").map { it.trim() }
         val debitKw = rule.debitKeywords.split(",").map { it.trim() }
         val type = detectType(smsBody, creditKw, debitKw)
+        val ref = extractRef(smsBody, GENERIC_REF_PATTERNS)
+        val balance = extractFirst(smsBody, GENERIC_BALANCE_PATTERNS) ?: ""
 
         return ParsedTransaction(
             amount = parseAmount(amountStr),
@@ -357,11 +379,12 @@ class SmsParser {
             timestamp = System.currentTimeMillis(),
             rawSms = smsBody,
             smsSender = smsSender,
-            smsHash = generateHash(smsBody, smsSender)
+            smsHash = generateHash(smsBody, smsSender),
+            transactionRef = ref,
+            smsSenderNumber = smsSender,
+            balance = if (balance.isNotEmpty()) "ETB ${formatBalance(balance)}" else ""
         )
     }
-
-    // ─── Generic fallback parser ─────────────────────────────────────────
 
     private fun tryGenericParse(smsBody: String, smsSender: String): ParsedTransaction? {
         val amountStr = extractFirst(smsBody, GENERIC_AMOUNT_PATTERNS) ?: return null
@@ -374,6 +397,9 @@ class SmsParser {
             listOf("debited", "sent", "withdrawn", "paid")
         )
 
+        val ref = extractRef(smsBody, GENERIC_REF_PATTERNS)
+        val balance = extractFirst(smsBody, GENERIC_BALANCE_PATTERNS) ?: ""
+
         return ParsedTransaction(
             amount = parseAmount(amountStr),
             currency = "ETB",
@@ -384,11 +410,12 @@ class SmsParser {
             timestamp = System.currentTimeMillis(),
             rawSms = smsBody,
             smsSender = smsSender,
-            smsHash = generateHash(smsBody, smsSender)
+            smsHash = generateHash(smsBody, smsSender),
+            transactionRef = ref,
+            smsSenderNumber = smsSender,
+            balance = if (balance.isNotEmpty()) "ETB ${formatBalance(balance)}" else ""
         )
     }
-
-    // ─── Helpers ─────────────────────────────────────────────────────────
 
     private fun extractFirst(text: String, patterns: List<Regex>): String? {
         for (pattern in patterns) {
@@ -401,8 +428,27 @@ class SmsParser {
         return null
     }
 
+    private fun extractRef(text: String, patterns: List<Regex>): String {
+        for (pattern in patterns) {
+            val match = pattern.find(text)
+            if (match != null) {
+                return if (match.groupValues.size > 1 && match.groupValues[1].isNotBlank()) {
+                    match.groupValues[1]
+                } else {
+                    match.value
+                }
+            }
+        }
+        return ""
+    }
+
     private fun parseAmount(amountStr: String): Double {
         return amountStr.replace(",", "").toDoubleOrNull() ?: 0.0
+    }
+
+    private fun formatBalance(balanceStr: String): String {
+        val amount = balanceStr.replace(",", "").toDoubleOrNull() ?: return balanceStr
+        return String.format("%,.2f", amount)
     }
 
     private fun detectType(
@@ -423,8 +469,7 @@ class SmsParser {
 
     private fun generateHash(smsBody: String, smsSender: String): String {
         val input = "$smsSender|$smsBody"
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(input.toByteArray())
-        return digest.joinToString("") { "%02x".format(it) }
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(input.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 }
