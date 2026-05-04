@@ -1,5 +1,6 @@
 package com.paysms.network
 
+import android.util.Log
 import com.paysms.data.model.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -53,7 +54,7 @@ class EmailSender {
                 javax.mail.Transport.send(message)
                 true
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("EmailSender", "Send email failed: ${e.message}")
                 false
             }
         }
@@ -73,6 +74,9 @@ class EmailSender {
                 }
                 if (!settings.senderEmail.contains("@") || !settings.receiverEmail.contains("@")) {
                     return@withContext EmailResult(false, "Invalid email format")
+                }
+                if (settings.smtpHost.isBlank()) {
+                    return@withContext EmailResult(false, "SMTP host is empty")
                 }
 
                 val props = Properties().apply {
@@ -105,9 +109,15 @@ class EmailSender {
                 javax.mail.Transport.send(message)
                 EmailResult(true, "Test email sent successfully to ${settings.receiverEmail}")
             } catch (e: javax.mail.AuthenticationFailedException) {
-                EmailResult(false, "Authentication failed: Check email/password")
+                EmailResult(false, "Authentication failed: Check email and password. For Gmail, use an App Password.")
             } catch (e: javax.mail.MessagingException) {
                 EmailResult(false, "SMTP error: ${e.message ?: "Connection failed"}")
+            } catch (e: java.net.ConnectException) {
+                EmailResult(false, "Connection refused: Check SMTP host and port")
+            } catch (e: java.net.UnknownHostException) {
+                EmailResult(false, "Cannot resolve SMTP host: ${settings.smtpHost}")
+            } catch (e: java.net.SocketTimeoutException) {
+                EmailResult(false, "Connection timed out: Check SMTP host and port")
             } catch (e: Exception) {
                 EmailResult(false, "${e.javaClass.simpleName}: ${e.message ?: "Unknown error"}")
             }

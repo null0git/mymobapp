@@ -1,5 +1,6 @@
 package com.paysms.network
 
+import android.util.Log
 import com.paysms.data.model.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,11 +20,18 @@ data class ApiResponse(
 
 class ApiClient {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val client by lazy {
+        try {
+            OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
+                .build()
+        } catch (e: Exception) {
+            Log.e("ApiClient", "Failed to create OkHttpClient: ${e.message}")
+            OkHttpClient()
+        }
+    }
 
     suspend fun sendTransaction(payload: String, settings: AppSettings): ApiResponse {
         return withContext(Dispatchers.IO) {
@@ -43,12 +51,32 @@ class ApiClient {
                     )
                 }
 
-                val requestBuilder = Request.Builder().url(url)
+                try {
+                    java.net.URL(url)
+                } catch (e: Exception) {
+                    return@withContext ApiResponse(
+                        success = false, statusCode = -1,
+                        body = "Malformed URL: ${e.message}", requestPayload = payload
+                    )
+                }
 
-                for ((key, value) in settings.apiHeaders) {
-                    if (key.isNotBlank()) {
-                        requestBuilder.addHeader(key.trim(), value.trim())
+                val requestBuilder = try {
+                    Request.Builder().url(url)
+                } catch (e: Exception) {
+                    return@withContext ApiResponse(
+                        success = false, statusCode = -1,
+                        body = "Invalid URL: ${e.message}", requestPayload = payload
+                    )
+                }
+
+                try {
+                    for ((key, value) in settings.apiHeaders) {
+                        if (key.isNotBlank()) {
+                            requestBuilder.addHeader(key.trim(), value.trim())
+                        }
                     }
+                } catch (e: Exception) {
+                    Log.e("ApiClient", "Header error: ${e.message}")
                 }
 
                 if (settings.apiKey.isNotBlank()) {
@@ -57,10 +85,17 @@ class ApiClient {
 
                 requestBuilder.addHeader("Content-Type", "application/json")
 
-                when (settings.apiMethod.uppercase()) {
-                    "GET" -> requestBuilder.get()
-                    "PUT" -> requestBuilder.put(payload.toRequestBody("application/json".toMediaType()))
-                    else -> requestBuilder.post(payload.toRequestBody("application/json".toMediaType()))
+                try {
+                    when (settings.apiMethod.uppercase()) {
+                        "GET" -> requestBuilder.get()
+                        "PUT" -> requestBuilder.put(payload.toRequestBody("application/json".toMediaType()))
+                        else -> requestBuilder.post(payload.toRequestBody("application/json".toMediaType()))
+                    }
+                } catch (e: Exception) {
+                    return@withContext ApiResponse(
+                        success = false, statusCode = -1,
+                        body = "Request build error: ${e.message}", requestPayload = payload
+                    )
                 }
 
                 val response = client.newCall(requestBuilder.build()).execute()
@@ -86,6 +121,9 @@ class ApiClient {
             } catch (e: java.net.SocketTimeoutException) {
                 val elapsed = System.currentTimeMillis() - startTime
                 ApiResponse(false, -1, "Connection timed out", payload, elapsed)
+            } catch (e: javax.net.ssl.SSLException) {
+                val elapsed = System.currentTimeMillis() - startTime
+                ApiResponse(false, -1, "SSL error: ${e.message}", payload, elapsed)
             } catch (e: IllegalArgumentException) {
                 val elapsed = System.currentTimeMillis() - startTime
                 ApiResponse(false, -1, "Invalid URL: ${e.message}", payload, elapsed)
@@ -97,7 +135,11 @@ class ApiClient {
     }
 
     suspend fun testConnection(settings: AppSettings): ApiResponse {
-        val testPayload = """{"test": true, "source": "PaySMS", "timestamp": ${System.currentTimeMillis()}}"""
-        return sendTransaction(testPayload, settings)
+        return try {
+            val testPayload = """{"test": true, "source": "PaySMS", "timestamp": ${System.currentTimeMillis()}}"""
+            sendTransaction(testPayload, settings)
+        } catch (e: Exception) {
+            ApiResponse(false, -1, "Test failed: ${e.message ?: "Unknown error"}")
+        }
     }
 }
