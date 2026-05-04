@@ -21,17 +21,6 @@ class PaySmsApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e("PaySMS", "Uncaught exception on thread ${thread.name}", throwable)
-            try {
-                NotificationHelper.showSyncNotification(
-                    this,
-                    "Error: ${throwable.message?.take(100) ?: "Unknown error"}"
-                )
-            } catch (_: Exception) { }
-        }
-
         try {
             NotificationHelper.createNotificationChannels(this)
         } catch (e: Exception) {
