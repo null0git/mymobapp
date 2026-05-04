@@ -4,13 +4,6 @@ import com.paysms.data.model.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Properties
-import javax.mail.Authenticator
-import javax.mail.Message
-import javax.mail.PasswordAuthentication
-import javax.mail.Session
-import javax.mail.Transport
-import javax.mail.internet.InternetAddress
-import javax.mail.internet.MimeMessage
 
 data class EmailResult(
     val success: Boolean,
@@ -26,31 +19,38 @@ class EmailSender {
     ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
+                if (settings.senderEmail.isBlank() || settings.receiverEmail.isBlank() || settings.senderPassword.isBlank()) {
+                    return@withContext false
+                }
+
                 val props = Properties().apply {
                     put("mail.smtp.auth", "true")
                     put("mail.smtp.starttls.enable", "true")
                     put("mail.smtp.host", settings.smtpHost)
                     put("mail.smtp.port", settings.smtpPort.toString())
                     put("mail.smtp.ssl.trust", settings.smtpHost)
+                    put("mail.smtp.connectiontimeout", "15000")
+                    put("mail.smtp.timeout", "15000")
+                    put("mail.smtp.writetimeout", "15000")
                 }
 
-                val session = Session.getInstance(props, object : Authenticator() {
-                    override fun getPasswordAuthentication(): PasswordAuthentication {
-                        return PasswordAuthentication(settings.senderEmail, settings.senderPassword)
+                val session = javax.mail.Session.getInstance(props, object : javax.mail.Authenticator() {
+                    override fun getPasswordAuthentication(): javax.mail.PasswordAuthentication {
+                        return javax.mail.PasswordAuthentication(settings.senderEmail, settings.senderPassword)
                     }
                 })
 
-                val message = MimeMessage(session).apply {
-                    setFrom(InternetAddress(settings.senderEmail))
+                val message = javax.mail.internet.MimeMessage(session).apply {
+                    setFrom(javax.mail.internet.InternetAddress(settings.senderEmail))
                     setRecipients(
-                        Message.RecipientType.TO,
-                        InternetAddress.parse(settings.receiverEmail)
+                        javax.mail.Message.RecipientType.TO,
+                        javax.mail.internet.InternetAddress.parse(settings.receiverEmail)
                     )
                     setSubject(subject)
                     setText(body)
                 }
 
-                Transport.send(message)
+                javax.mail.Transport.send(message)
                 true
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -62,6 +62,19 @@ class EmailSender {
     suspend fun testConnection(settings: AppSettings): EmailResult {
         return withContext(Dispatchers.IO) {
             try {
+                if (settings.senderEmail.isBlank()) {
+                    return@withContext EmailResult(false, "Sender email is empty")
+                }
+                if (settings.senderPassword.isBlank()) {
+                    return@withContext EmailResult(false, "Email password is empty")
+                }
+                if (settings.receiverEmail.isBlank()) {
+                    return@withContext EmailResult(false, "Receiver email is empty")
+                }
+                if (!settings.senderEmail.contains("@") || !settings.receiverEmail.contains("@")) {
+                    return@withContext EmailResult(false, "Invalid email format")
+                }
+
                 val props = Properties().apply {
                     put("mail.smtp.auth", "true")
                     put("mail.smtp.starttls.enable", "true")
@@ -70,28 +83,33 @@ class EmailSender {
                     put("mail.smtp.ssl.trust", settings.smtpHost)
                     put("mail.smtp.connectiontimeout", "10000")
                     put("mail.smtp.timeout", "10000")
+                    put("mail.smtp.writetimeout", "10000")
                 }
 
-                val session = Session.getInstance(props, object : Authenticator() {
-                    override fun getPasswordAuthentication(): PasswordAuthentication {
-                        return PasswordAuthentication(settings.senderEmail, settings.senderPassword)
+                val session = javax.mail.Session.getInstance(props, object : javax.mail.Authenticator() {
+                    override fun getPasswordAuthentication(): javax.mail.PasswordAuthentication {
+                        return javax.mail.PasswordAuthentication(settings.senderEmail, settings.senderPassword)
                     }
                 })
 
-                val message = MimeMessage(session).apply {
-                    setFrom(InternetAddress(settings.senderEmail))
+                val message = javax.mail.internet.MimeMessage(session).apply {
+                    setFrom(javax.mail.internet.InternetAddress(settings.senderEmail))
                     setRecipients(
-                        Message.RecipientType.TO,
-                        InternetAddress.parse(settings.receiverEmail)
+                        javax.mail.Message.RecipientType.TO,
+                        javax.mail.internet.InternetAddress.parse(settings.receiverEmail)
                     )
                     setSubject("PaySMS Test Email")
                     setText("This is a test email from PaySMS to verify your email configuration is working correctly.\n\nTimestamp: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
                 }
 
-                Transport.send(message)
+                javax.mail.Transport.send(message)
                 EmailResult(true, "Test email sent successfully to ${settings.receiverEmail}")
+            } catch (e: javax.mail.AuthenticationFailedException) {
+                EmailResult(false, "Authentication failed: Check email/password")
+            } catch (e: javax.mail.MessagingException) {
+                EmailResult(false, "SMTP error: ${e.message ?: "Connection failed"}")
             } catch (e: Exception) {
-                EmailResult(false, "Failed: ${e.message ?: "Unknown error"}")
+                EmailResult(false, "${e.javaClass.simpleName}: ${e.message ?: "Unknown error"}")
             }
         }
     }

@@ -24,5 +24,9 @@ data class AppSettings(
     val darkMode: String = "system",
     val whitelistEnabled: Boolean = false,
     val whitelistedSenders: List<String> = emptyList(),
-    val blacklistedSenders: List<String> = emptyList()
+    val blacklistedSenders: List<String> = emptyList(),
+    val maxRetryAttempts: Int = 3,
+    val retryDelayMinutes: Int = 5,
+    val soundEnabled: Boolean = true,
+    val vibrationEnabled: Boolean = true
 )

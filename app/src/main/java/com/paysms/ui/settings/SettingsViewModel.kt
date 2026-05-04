@@ -58,47 +58,90 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun updateSettings(settings: AppSettings) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isSaving = true)
-            settingsManager.updateSettings(settings)
-            _state.value = _state.value.copy(
-                settings = settings,
-                isSaving = false,
-                saveMessage = "Settings saved"
-            )
+            try {
+                _state.value = _state.value.copy(isSaving = true)
+                settingsManager.updateSettings(settings)
+                _state.value = _state.value.copy(
+                    settings = settings,
+                    isSaving = false,
+                    saveMessage = "Settings saved"
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isSaving = false, saveMessage = "Save failed: ${e.message}")
+            }
         }
     }
 
     fun testApiConnection() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(apiTestLoading = true, apiTestResult = null)
-            val settings = _state.value.settings
-            if (settings.apiUrl.isEmpty()) {
-                _state.value = _state.value.copy(apiTestLoading = false, apiTestResult = "Error: API URL is empty")
-                return@launch
+            try {
+                _state.value = _state.value.copy(apiTestLoading = true, apiTestResult = null)
+                val settings = _state.value.settings
+
+                if (settings.apiUrl.isBlank()) {
+                    _state.value = _state.value.copy(apiTestLoading = false, apiTestResult = "Error: API URL is empty")
+                    return@launch
+                }
+
+                val url = settings.apiUrl.trim()
+                if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                    _state.value = _state.value.copy(
+                        apiTestLoading = false,
+                        apiTestResult = "Error: URL must start with http:// or https://"
+                    )
+                    return@launch
+                }
+
+                val response = apiClient.testConnection(settings.copy(apiUrl = url))
+                val result = if (response.success) {
+                    "OK: ${response.statusCode} (${response.responseTimeMs}ms)\n${response.body.take(200)}"
+                } else {
+                    "Error: ${response.statusCode} - ${response.body.take(200)}"
+                }
+                _state.value = _state.value.copy(apiTestLoading = false, apiTestResult = result)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    apiTestLoading = false,
+                    apiTestResult = "Crash prevented: ${e.message ?: "Unknown error"}"
+                )
             }
-            val response = apiClient.testConnection(settings)
-            val result = if (response.success) {
-                "OK: ${response.statusCode} (${response.responseTimeMs}ms)"
-            } else {
-                "Error: ${response.statusCode} - ${response.body.take(100)}"
-            }
-            _state.value = _state.value.copy(apiTestLoading = false, apiTestResult = result)
         }
     }
 
     fun testEmailConnection() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(emailTestLoading = true, emailTestResult = null)
-            val settings = _state.value.settings
-            if (settings.senderEmail.isEmpty() || settings.receiverEmail.isEmpty()) {
-                _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Email addresses required")
-                return@launch
+            try {
+                _state.value = _state.value.copy(emailTestLoading = true, emailTestResult = null)
+                val settings = _state.value.settings
+
+                if (settings.senderEmail.isBlank()) {
+                    _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Sender email is empty")
+                    return@launch
+                }
+                if (settings.senderPassword.isBlank()) {
+                    _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Email password is empty")
+                    return@launch
+                }
+                if (settings.receiverEmail.isBlank()) {
+                    _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Receiver email is empty")
+                    return@launch
+                }
+                if (!settings.senderEmail.contains("@") || !settings.receiverEmail.contains("@")) {
+                    _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Invalid email format")
+                    return@launch
+                }
+
+                val result = emailSender.testConnection(settings)
+                _state.value = _state.value.copy(
+                    emailTestLoading = false,
+                    emailTestResult = result.message
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    emailTestLoading = false,
+                    emailTestResult = "Crash prevented: ${e.message ?: "Unknown error"}"
+                )
             }
-            val result = emailSender.testConnection(settings)
-            _state.value = _state.value.copy(
-                emailTestLoading = false,
-                emailTestResult = result.message
-            )
         }
     }
 

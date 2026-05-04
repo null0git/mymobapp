@@ -46,6 +46,10 @@ class SettingsManager(private val context: Context) {
         val WHITELIST_ENABLED = booleanPreferencesKey("whitelist_enabled")
         val WHITELISTED_SENDERS = stringPreferencesKey("whitelisted_senders")
         val BLACKLISTED_SENDERS = stringPreferencesKey("blacklisted_senders")
+        val MAX_RETRY_ATTEMPTS = intPreferencesKey("max_retry_attempts")
+        val RETRY_DELAY_MINUTES = intPreferencesKey("retry_delay_minutes")
+        val SOUND_ENABLED = booleanPreferencesKey("sound_enabled")
+        val VIBRATION_ENABLED = booleanPreferencesKey("vibration_enabled")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -83,7 +87,11 @@ class SettingsManager(private val context: Context) {
             } ?: emptyList(),
             blacklistedSenders = prefs[Keys.BLACKLISTED_SENDERS]?.let {
                 gson.fromJson<List<String>>(it, object : TypeToken<List<String>>() {}.type)
-            } ?: emptyList()
+            } ?: emptyList(),
+            maxRetryAttempts = prefs[Keys.MAX_RETRY_ATTEMPTS] ?: 3,
+            retryDelayMinutes = prefs[Keys.RETRY_DELAY_MINUTES] ?: 5,
+            soundEnabled = prefs[Keys.SOUND_ENABLED] ?: true,
+            vibrationEnabled = prefs[Keys.VIBRATION_ENABLED] ?: true
         )
     }
 
@@ -113,6 +121,10 @@ class SettingsManager(private val context: Context) {
             prefs[Keys.WHITELIST_ENABLED] = settings.whitelistEnabled
             prefs[Keys.WHITELISTED_SENDERS] = gson.toJson(settings.whitelistedSenders)
             prefs[Keys.BLACKLISTED_SENDERS] = gson.toJson(settings.blacklistedSenders)
+            prefs[Keys.MAX_RETRY_ATTEMPTS] = settings.maxRetryAttempts
+            prefs[Keys.RETRY_DELAY_MINUTES] = settings.retryDelayMinutes
+            prefs[Keys.SOUND_ENABLED] = settings.soundEnabled
+            prefs[Keys.VIBRATION_ENABLED] = settings.vibrationEnabled
         }
     }
 }

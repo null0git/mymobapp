@@ -75,7 +75,6 @@ import com.paysms.ui.theme.Warning
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
-    val context = LocalContext.current
 
     LazyColumn(
         modifier = Modifier
@@ -298,6 +297,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 SwitchRow("Push notifications", state.settings.notificationsEnabled) {
                     viewModel.updateSettings(state.settings.copy(notificationsEnabled = it))
                 }
+                if (state.settings.notificationsEnabled) {
+                    SwitchRow("Sound", state.settings.soundEnabled) {
+                        viewModel.updateSettings(state.settings.copy(soundEnabled = it))
+                    }
+                    SwitchRow("Vibration", state.settings.vibrationEnabled) {
+                        viewModel.updateSettings(state.settings.copy(vibrationEnabled = it))
+                    }
+                }
             }
         }
 
@@ -334,6 +341,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 SettingsNumberField("Data Retention (days)", state.settings.dataRetentionDays) {
                     viewModel.updateSettings(state.settings.copy(dataRetentionDays = it))
                 }
+                SettingsNumberField("Max retry attempts", state.settings.maxRetryAttempts) {
+                    viewModel.updateSettings(state.settings.copy(maxRetryAttempts = it.coerceIn(1, 10)))
+                }
+                SettingsNumberField("Retry delay (minutes)", state.settings.retryDelayMinutes) {
+                    viewModel.updateSettings(state.settings.copy(retryDelayMinutes = it.coerceIn(1, 60)))
+                }
             }
         }
 
@@ -356,7 +369,47 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             }
         }
 
+        // About
+        item {
+            SettingsSection(
+                title = "About",
+                icon = Icons.Filled.Settings
+            ) {
+                DetailInfoRow("App Version", "1.0.0")
+                DetailInfoRow("Database Version", "2")
+                DetailInfoRow("Min Android", "8.0 (API 26)")
+                DetailInfoRow("Supported Banks", "Abay, BOA, Dashen, CBE + custom")
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "PaySMS - Smart Payment Verification System",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+            }
+        }
+
         item { Spacer(modifier = Modifier.height(80.dp)) }
+    }
+}
+
+@Composable
+private fun DetailInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

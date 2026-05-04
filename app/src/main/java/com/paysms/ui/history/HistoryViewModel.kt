@@ -19,7 +19,8 @@ data class HistoryState(
     val searchQuery: String = "",
     val selectedBank: String? = null,
     val banks: List<String> = emptyList(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val toastMessage: String? = null
 )
 
 class HistoryViewModel(application: Application) : AndroidViewModel(application) {
@@ -68,47 +69,86 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
 
     fun sendToApi(transaction: Transaction) {
         viewModelScope.launch {
-            val payload = transaction.apiRequestPayload.ifEmpty {
-                gson.toJson(
-                    mapOf(
-                        "amount" to transaction.amount,
-                        "currency" to transaction.currency,
-                        "sender" to transaction.senderName,
-                        "bank" to transaction.bankName,
-                        "account" to transaction.accountNumber,
-                        "type" to transaction.transactionType.name,
-                        "timestamp" to transaction.timestamp,
-                        "transactionRef" to transaction.transactionRef
+            try {
+                val payload = transaction.apiRequestPayload.ifEmpty {
+                    gson.toJson(
+                        mapOf(
+                            "amount" to transaction.amount,
+                            "currency" to transaction.currency,
+                            "sender" to transaction.senderName,
+                            "bank" to transaction.bankName,
+                            "account" to transaction.accountNumber,
+                            "type" to transaction.transactionType.name,
+                            "timestamp" to transaction.timestamp,
+                            "transactionRef" to transaction.transactionRef
+                        )
+                    )
+                }
+                repository.insertPendingRequest(
+                    PendingRequest(
+                        transactionId = transaction.id,
+                        requestType = RequestType.API_CALL,
+                        payload = payload
                     )
                 )
+                SyncWorker.enqueue(getApplication())
+                _state.value = _state.value.copy(toastMessage = "Queued for API send")
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(toastMessage = "Failed to queue: ${e.message}")
             }
-            repository.insertPendingRequest(
-                PendingRequest(
-                    transactionId = transaction.id,
-                    requestType = RequestType.API_CALL,
-                    payload = payload
-                )
-            )
-            SyncWorker.enqueue(getApplication())
         }
     }
 
     fun sendToEmail(transaction: Transaction) {
         viewModelScope.launch {
-            val emailPayload = gson.toJson(
-                mapOf(
-                    "subject" to "Payment: ${transaction.currency} ${String.format("%.2f", transaction.amount)}",
-                    "body" to (transaction.emailBody.ifEmpty { "Transaction from ${transaction.senderName}: ${transaction.currency} ${String.format("%.2f", transaction.amount)}" })
+            try {
+                val emailPayload = gson.toJson(
+                    mapOf(
+                        "subject" to "Payment: ${transaction.currency} ${String.format("%.2f", transaction.amount)}",
+                        "body" to (transaction.emailBody.ifEmpty { "Transaction from ${transaction.senderName}: ${transaction.currency} ${String.format("%.2f", transaction.amount)}" })
+                    )
                 )
-            )
-            repository.insertPendingRequest(
-                PendingRequest(
-                    transactionId = transaction.id,
-                    requestType = RequestType.EMAIL,
-                    payload = emailPayload
+                repository.insertPendingRequest(
+                    PendingRequest(
+                        transactionId = transaction.id,
+                        requestType = RequestType.EMAIL,
+                        payload = emailPayload
+                    )
                 )
-            )
-            SyncWorker.enqueue(getApplication())
+                SyncWorker.enqueue(getApplication())
+                _state.value = _state.value.copy(toastMessage = "Queued for email send")
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(toastMessage = "Failed to queue: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            try {
+                repository.deleteTransaction(transaction.id)
+                _state.value = _state.value.copy(toastMessage = "Transaction deleted")
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(toastMessage = "Delete failed: ${e.message}")
+            }
+        }
+    }
+
+    fun clearToast() {
+        _state.value = _state.value.copy(toastMessage = null)
+    }
+
+    fun getTransactionShareText(transaction: Transaction): String {
+        return buildString {
+            appendLine("PaySMS Transaction")
+            appendLine("Amount: ${if (transaction.transactionType == com.paysms.data.model.TransactionType.CREDIT) "+" else "-"}${transaction.currency} ${String.format("%.2f", transaction.amount)}")
+            appendLine("Sender: ${transaction.senderName}")
+            appendLine("Bank: ${transaction.bankName}")
+            if (transaction.accountNumber.isNotEmpty()) appendLine("Account: ${transaction.accountNumber}")
+            if (transaction.transactionRef.isNotEmpty()) appendLine("Ref: ${transaction.transactionRef}")
+            if (transaction.balance.isNotEmpty()) appendLine("Balance: ${transaction.balance}")
+            appendLine("Date: ${com.paysms.util.DateUtils.formatDateTime(transaction.timestamp)}")
+            appendLine("Type: ${transaction.transactionType.name}")
         }
     }
 
@@ -141,7 +181,8 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
                 it.senderName.contains(query, ignoreCase = true) ||
                     it.bankName.contains(query, ignoreCase = true) ||
                     it.rawSms.contains(query, ignoreCase = true) ||
-                    it.transactionRef.contains(query, ignoreCase = true)
+                    it.transactionRef.contains(query, ignoreCase = true) ||
+                    it.smsSenderNumber.contains(query, ignoreCase = true)
             }
         }
 

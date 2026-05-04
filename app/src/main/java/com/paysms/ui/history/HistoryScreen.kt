@@ -1,6 +1,9 @@
 package com.paysms.ui.history
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,11 +31,14 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -46,8 +52,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,6 +87,13 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
 
+    LaunchedEffect(state.toastMessage) {
+        state.toastMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            viewModel.clearToast()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -103,7 +118,6 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
-            // Export button
             ExportDropdown(context, state.transactions)
         }
 
@@ -113,7 +127,7 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
             value = state.searchQuery,
             onValueChange = { viewModel.onSearchQueryChanged(it) },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Search by name, bank, or amount...") },
+            placeholder = { Text("Search by name, bank, ref, or sender...") },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)) },
             trailingIcon = {
                 if (state.searchQuery.isNotEmpty()) {
@@ -191,7 +205,24 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
             TransactionDetailSheet(
                 transaction = transaction,
                 onSendToApi = { viewModel.sendToApi(transaction) },
-                onSendToEmail = { viewModel.sendToEmail(transaction) }
+                onSendToEmail = { viewModel.sendToEmail(transaction) },
+                onDelete = {
+                    viewModel.deleteTransaction(transaction)
+                    selectedTransaction = null
+                },
+                onCopy = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Transaction", viewModel.getTransactionShareText(transaction)))
+                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                },
+                onShare = {
+                    val shareText = viewModel.getTransactionShareText(transaction)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share Transaction"))
+                }
             )
         }
     }
@@ -214,13 +245,17 @@ private fun ExportDropdown(context: Context, transactions: List<Transaction>) {
                     text = { Text("Export as ${format.name}") },
                     onClick = {
                         expanded = false
-                        val manager = ExportManager(context)
-                        val file = manager.export(transactions, format)
-                        if (file != null) {
-                            val intent = manager.shareFile(file)
-                            context.startActivity(android.content.Intent.createChooser(intent, "Share ${format.name}"))
-                        } else {
-                            Toast.makeText(context, "Export failed", Toast.LENGTH_SHORT).show()
+                        try {
+                            val manager = ExportManager(context)
+                            val file = manager.export(transactions, format)
+                            if (file != null) {
+                                val intent = manager.shareFile(file)
+                                context.startActivity(Intent.createChooser(intent, "Share ${format.name}"))
+                            } else {
+                                Toast.makeText(context, "Export failed", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
                 )
@@ -347,8 +382,31 @@ private fun StatusDot(sent: Boolean, label: String) {
 private fun TransactionDetailSheet(
     transaction: Transaction,
     onSendToApi: () -> Unit,
-    onSendToEmail: () -> Unit
+    onSendToEmail: () -> Unit,
+    onDelete: () -> Unit,
+    onCopy: () -> Unit,
+    onShare: () -> Unit
 ) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Transaction") },
+            text = { Text("Are you sure you want to delete this transaction? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = { showDeleteDialog = false; onDelete() }) {
+                    Text("Delete", color = DebitRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -399,10 +457,10 @@ private fun TransactionDetailSheet(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Action buttons
+        // Action buttons row 1
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
                 onClick = onSendToApi,
@@ -410,18 +468,55 @@ private fun TransactionDetailSheet(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Icon(Icons.Filled.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Send to API", fontSize = 13.sp)
+                Icon(Icons.Filled.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("API", fontSize = 12.sp)
             }
             OutlinedButton(
                 onClick = onSendToEmail,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Filled.Email, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Send Email", fontSize = 13.sp)
+                Icon(Icons.Filled.Email, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Email", fontSize = 12.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Action buttons row 2: Copy, Share, Delete
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onCopy,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Copy", fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = onShare,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Share", fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = DebitRed)
+            ) {
+                Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Delete", fontSize = 12.sp)
             }
         }
 
