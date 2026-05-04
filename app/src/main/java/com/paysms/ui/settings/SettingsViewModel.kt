@@ -21,7 +21,8 @@ data class SettingsState(
     val apiTestLoading: Boolean = false,
     val apiTestResult: String? = null,
     val emailTestLoading: Boolean = false,
-    val emailTestResult: String? = null
+    val emailTestResult: String? = null,
+    val errorDialogMessage: String? = null
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -42,16 +43,28 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private fun loadSettings() {
         viewModelScope.launch {
-            settingsManager.settings.collectLatest { settings ->
-                _state.value = _state.value.copy(settings = settings)
+            try {
+                settingsManager.settings.collectLatest { settings ->
+                    _state.value = _state.value.copy(settings = settings)
+                }
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    errorDialogMessage = "Failed to load settings: ${e.message}"
+                )
             }
         }
     }
 
     private fun loadBankRules() {
         viewModelScope.launch {
-            repository.getAllBankRules().collectLatest { rules ->
-                _state.value = _state.value.copy(bankRules = rules)
+            try {
+                repository.getAllBankRules().collectLatest { rules ->
+                    _state.value = _state.value.copy(bankRules = rules)
+                }
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    errorDialogMessage = "Failed to load bank rules: ${e.message}"
+                )
             }
         }
     }
@@ -67,7 +80,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     saveMessage = "Settings saved"
                 )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(isSaving = false, saveMessage = "Save failed: ${e.message}")
+                _state.value = _state.value.copy(
+                    isSaving = false,
+                    saveMessage = "Save failed: ${e.message}",
+                    errorDialogMessage = "Failed to save settings: ${e.message}"
+                )
             }
         }
     }
@@ -79,7 +96,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val settings = _state.value.settings
 
                 if (settings.apiUrl.isBlank()) {
-                    _state.value = _state.value.copy(apiTestLoading = false, apiTestResult = "Error: API URL is empty")
+                    _state.value = _state.value.copy(
+                        apiTestLoading = false,
+                        apiTestResult = "Error: API URL is empty",
+                        errorDialogMessage = "API URL is empty. Please enter a valid URL."
+                    )
                     return@launch
                 }
 
@@ -87,22 +108,41 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 if (!url.startsWith("http://") && !url.startsWith("https://")) {
                     _state.value = _state.value.copy(
                         apiTestLoading = false,
-                        apiTestResult = "Error: URL must start with http:// or https://"
+                        apiTestResult = "Error: URL must start with http:// or https://",
+                        errorDialogMessage = "Invalid URL format. URL must start with http:// or https://"
+                    )
+                    return@launch
+                }
+
+                try {
+                    java.net.URL(url)
+                } catch (e: Exception) {
+                    _state.value = _state.value.copy(
+                        apiTestLoading = false,
+                        apiTestResult = "Error: Malformed URL",
+                        errorDialogMessage = "The URL is malformed: ${e.message}"
                     )
                     return@launch
                 }
 
                 val response = apiClient.testConnection(settings.copy(apiUrl = url))
-                val result = if (response.success) {
-                    "OK: ${response.statusCode} (${response.responseTimeMs}ms)\n${response.body.take(200)}"
+                if (response.success) {
+                    _state.value = _state.value.copy(
+                        apiTestLoading = false,
+                        apiTestResult = "OK: ${response.statusCode} (${response.responseTimeMs}ms)\n${response.body.take(200)}"
+                    )
                 } else {
-                    "Error: ${response.statusCode} - ${response.body.take(200)}"
+                    _state.value = _state.value.copy(
+                        apiTestLoading = false,
+                        apiTestResult = "Error: ${response.statusCode} - ${response.body.take(200)}",
+                        errorDialogMessage = "API Test Failed\n\nStatus: ${response.statusCode}\n${response.body.take(300)}"
+                    )
                 }
-                _state.value = _state.value.copy(apiTestLoading = false, apiTestResult = result)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     apiTestLoading = false,
-                    apiTestResult = "Crash prevented: ${e.message ?: "Unknown error"}"
+                    apiTestResult = "Error: ${e.message ?: "Unknown error"}",
+                    errorDialogMessage = "API Test Error\n\n${e.javaClass.simpleName}: ${e.message ?: "Unknown error"}"
                 )
             }
         }
@@ -115,19 +155,43 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val settings = _state.value.settings
 
                 if (settings.senderEmail.isBlank()) {
-                    _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Sender email is empty")
+                    _state.value = _state.value.copy(
+                        emailTestLoading = false,
+                        emailTestResult = "Error: Sender email is empty",
+                        errorDialogMessage = "Sender email is empty. Please enter a valid sender email address."
+                    )
                     return@launch
                 }
                 if (settings.senderPassword.isBlank()) {
-                    _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Email password is empty")
+                    _state.value = _state.value.copy(
+                        emailTestLoading = false,
+                        emailTestResult = "Error: Email password is empty",
+                        errorDialogMessage = "Email password is empty. For Gmail, use an App Password (not your regular password)."
+                    )
                     return@launch
                 }
                 if (settings.receiverEmail.isBlank()) {
-                    _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Receiver email is empty")
+                    _state.value = _state.value.copy(
+                        emailTestLoading = false,
+                        emailTestResult = "Error: Receiver email is empty",
+                        errorDialogMessage = "Receiver email is empty. Please enter a valid receiver email address."
+                    )
                     return@launch
                 }
                 if (!settings.senderEmail.contains("@") || !settings.receiverEmail.contains("@")) {
-                    _state.value = _state.value.copy(emailTestLoading = false, emailTestResult = "Error: Invalid email format")
+                    _state.value = _state.value.copy(
+                        emailTestLoading = false,
+                        emailTestResult = "Error: Invalid email format",
+                        errorDialogMessage = "Invalid email format. Emails must contain an '@' symbol."
+                    )
+                    return@launch
+                }
+                if (settings.smtpHost.isBlank()) {
+                    _state.value = _state.value.copy(
+                        emailTestLoading = false,
+                        emailTestResult = "Error: SMTP host is empty",
+                        errorDialogMessage = "SMTP host is empty. Common values: smtp.gmail.com, smtp.outlook.com"
+                    )
                     return@launch
                 }
 
@@ -136,30 +200,58 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     emailTestLoading = false,
                     emailTestResult = result.message
                 )
+                if (!result.success) {
+                    _state.value = _state.value.copy(
+                        errorDialogMessage = "Email Test Failed\n\n${result.message}"
+                    )
+                }
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     emailTestLoading = false,
-                    emailTestResult = "Crash prevented: ${e.message ?: "Unknown error"}"
+                    emailTestResult = "Error: ${e.message ?: "Unknown error"}",
+                    errorDialogMessage = "Email Test Error\n\n${e.javaClass.simpleName}: ${e.message ?: "Unknown error"}"
                 )
             }
         }
     }
 
+    fun dismissErrorDialog() {
+        _state.value = _state.value.copy(errorDialogMessage = null)
+    }
+
     fun addBankRule(rule: BankRule) {
         viewModelScope.launch {
-            repository.insertBankRule(rule)
+            try {
+                repository.insertBankRule(rule)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    errorDialogMessage = "Failed to add bank rule: ${e.message}"
+                )
+            }
         }
     }
 
     fun updateBankRule(rule: BankRule) {
         viewModelScope.launch {
-            repository.updateBankRule(rule)
+            try {
+                repository.updateBankRule(rule)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    errorDialogMessage = "Failed to update bank rule: ${e.message}"
+                )
+            }
         }
     }
 
     fun deleteBankRule(rule: BankRule) {
         viewModelScope.launch {
-            repository.deleteBankRule(rule)
+            try {
+                repository.deleteBankRule(rule)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    errorDialogMessage = "Failed to delete bank rule: ${e.message}"
+                )
+            }
         }
     }
 

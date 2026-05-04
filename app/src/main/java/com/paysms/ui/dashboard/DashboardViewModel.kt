@@ -1,6 +1,7 @@
 package com.paysms.ui.dashboard
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.paysms.PaySmsApp
@@ -39,51 +40,60 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         val startOfDay = DateUtils.getStartOfDay()
 
         viewModelScope.launch {
-            combine(
-                repository.getTotalCreditSince(startOfDay),
-                repository.getTotalDebitSince(startOfDay),
-                repository.getTransactionCountSince(startOfDay),
-                repository.getAllTransactions(),
-                repository.getPendingCount()
-            ) { credit, debit, count, transactions, pendingCount ->
-                val bankMap = mutableMapOf<String, Double>()
-                transactions
-                    .filter { it.timestamp >= startOfDay && it.transactionType == com.paysms.data.model.TransactionType.CREDIT }
-                    .forEach { tx ->
-                        bankMap[tx.bankName] = (bankMap[tx.bankName] ?: 0.0) + tx.amount
-                    }
+            try {
+                combine(
+                    repository.getTotalCreditSince(startOfDay),
+                    repository.getTotalDebitSince(startOfDay),
+                    repository.getTransactionCountSince(startOfDay),
+                    repository.getAllTransactions(),
+                    repository.getPendingCount()
+                ) { credit, debit, count, transactions, pendingCount ->
+                    val bankMap = mutableMapOf<String, Double>()
+                    transactions
+                        .filter { it.timestamp >= startOfDay && it.transactionType == com.paysms.data.model.TransactionType.CREDIT }
+                        .forEach { tx ->
+                            bankMap[tx.bankName] = (bankMap[tx.bankName] ?: 0.0) + tx.amount
+                        }
 
-                val dailyData = buildDailyData(transactions)
+                    val dailyData = buildDailyData(transactions)
 
-                DashboardState(
-                    totalReceivedToday = credit ?: 0.0,
-                    totalSentToday = debit ?: 0.0,
-                    transactionCountToday = count,
-                    bankSummaries = bankMap.map { BankSummary(it.key, it.value) }
-                        .sortedByDescending { it.total },
-                    recentTransactions = transactions.take(5),
-                    pendingCount = pendingCount,
-                    dailyData = dailyData
-                )
-            }.collect { state ->
-                _state.value = state
+                    DashboardState(
+                        totalReceivedToday = credit ?: 0.0,
+                        totalSentToday = debit ?: 0.0,
+                        transactionCountToday = count,
+                        bankSummaries = bankMap.map { BankSummary(it.key, it.value) }
+                            .sortedByDescending { it.total },
+                        recentTransactions = transactions.take(5),
+                        pendingCount = pendingCount,
+                        dailyData = dailyData
+                    )
+                }.collect { state ->
+                    _state.value = state
+                }
+            } catch (e: Exception) {
+                Log.e("DashboardVM", "Error loading dashboard: ${e.message}")
             }
         }
     }
 
     private fun buildDailyData(transactions: List<Transaction>): List<Pair<String, Double>> {
-        val result = mutableListOf<Pair<String, Double>>()
-        for (i in 6 downTo 0) {
-            val dayStart = DateUtils.getDaysAgo(i)
-            val dayEnd = if (i == 0) System.currentTimeMillis() else DateUtils.getDaysAgo(i - 1)
-            val total = transactions
-                .filter {
-                    it.timestamp in dayStart until dayEnd &&
-                        it.transactionType == com.paysms.data.model.TransactionType.CREDIT
-                }
-                .sumOf { it.amount }
-            result.add(DateUtils.formatDate(dayStart).takeLast(5) to total)
+        return try {
+            val result = mutableListOf<Pair<String, Double>>()
+            for (i in 6 downTo 0) {
+                val dayStart = DateUtils.getDaysAgo(i)
+                val dayEnd = if (i == 0) System.currentTimeMillis() else DateUtils.getDaysAgo(i - 1)
+                val total = transactions
+                    .filter {
+                        it.timestamp in dayStart until dayEnd &&
+                            it.transactionType == com.paysms.data.model.TransactionType.CREDIT
+                    }
+                    .sumOf { it.amount }
+                result.add(DateUtils.formatDate(dayStart).takeLast(5) to total)
+            }
+            result
+        } catch (e: Exception) {
+            Log.e("DashboardVM", "Error building daily data: ${e.message}")
+            emptyList()
         }
-        return result
     }
 }

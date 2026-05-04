@@ -1,6 +1,7 @@
 package com.paysms.offline
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -27,98 +28,134 @@ class SyncWorker(
     private val gson = Gson()
 
     override suspend fun doWork(): Result {
-        val app = applicationContext as PaySmsApp
-        val repository = app.repository
-        val settings = app.settingsManager.settings.first()
+        return try {
+            val app = applicationContext as PaySmsApp
+            val repository = app.repository
+            val settings = app.settingsManager.settings.first()
 
-        val pendingRequests = repository.getPendingRequests()
-        if (pendingRequests.isEmpty()) return Result.success()
+            val pendingRequests = repository.getPendingRequests()
+            if (pendingRequests.isEmpty()) return Result.success()
 
-        var successCount = 0
-        var failCount = 0
+            var successCount = 0
+            var failCount = 0
 
-        for (request in pendingRequests) {
-            val success = when (request.requestType) {
-                RequestType.API_CALL -> {
-                    if (settings.apiEnabled) {
-                        val response = apiClient.sendTransaction(request.payload, settings)
-                        if (response.success) {
-                            val transaction = repository.run {
-                                val dao = app.database.transactionDao()
-                                dao.getTransactionById(request.transactionId)
+            for (request in pendingRequests) {
+                try {
+                    val success = when (request.requestType) {
+                        RequestType.API_CALL -> {
+                            if (settings.apiEnabled) {
+                                try {
+                                    val response = apiClient.sendTransaction(request.payload, settings)
+                                    if (response.success) {
+                                        try {
+                                            val dao = app.database.transactionDao()
+                                            val transaction = dao.getTransactionById(request.transactionId)
+                                            transaction?.let {
+                                                repository.updateTransaction(
+                                                    it.copy(
+                                                        apiSent = true,
+                                                        apiResponse = response.body,
+                                                        apiStatusCode = response.statusCode
+                                                    )
+                                                )
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e("SyncWorker", "Failed to update transaction: ${e.message}")
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("SyncWorker", "API call failed: ${e.message}")
+                                    false
+                                }
+                            } else {
+                                true
                             }
-                            transaction?.let {
-                                repository.updateTransaction(
-                                    it.copy(
-                                        apiSent = true,
-                                        apiResponse = response.body,
-                                        apiStatusCode = response.statusCode
-                                    )
-                                )
-                            }
-                            true
-                        } else {
-                            false
                         }
-                    } else {
-                        true
+                        RequestType.EMAIL -> {
+                            if (settings.emailEnabled) {
+                                try {
+                                    val emailData: Map<String, String> = gson.fromJson(
+                                        request.payload,
+                                        object : TypeToken<Map<String, String>>() {}.type
+                                    )
+                                    emailSender.sendEmail(
+                                        subject = emailData["subject"] ?: "Payment Notification",
+                                        body = emailData["body"] ?: "",
+                                        settings = settings
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e("SyncWorker", "Email failed: ${e.message}")
+                                    false
+                                }
+                            } else {
+                                true
+                            }
+                        }
                     }
-                }
-                RequestType.EMAIL -> {
-                    if (settings.emailEnabled) {
-                        val emailData: Map<String, String> = gson.fromJson(
-                            request.payload,
-                            object : TypeToken<Map<String, String>>() {}.type
-                        )
-                        emailSender.sendEmail(
-                            subject = emailData["subject"] ?: "Payment Notification",
-                            body = emailData["body"] ?: "",
-                            settings = settings
-                        )
+
+                    if (success) {
+                        repository.deletePendingRequest(request)
+                        successCount++
                     } else {
-                        true
+                        val maxRetries = settings.maxRetryAttempts
+                        if (request.retryCount >= maxRetries) {
+                            repository.deletePendingRequest(request)
+                            Log.w("SyncWorker", "Request exceeded max retries ($maxRetries), removing")
+                        } else {
+                            repository.updatePendingRequest(
+                                request.copy(
+                                    retryCount = request.retryCount + 1,
+                                    lastAttempt = System.currentTimeMillis()
+                                )
+                            )
+                        }
+                        failCount++
                     }
+                } catch (e: Exception) {
+                    Log.e("SyncWorker", "Error processing request ${request.id}: ${e.message}")
+                    failCount++
                 }
             }
 
-            if (success) {
-                repository.deletePendingRequest(request)
-                successCount++
-            } else {
-                repository.updatePendingRequest(
-                    request.copy(
-                        retryCount = request.retryCount + 1,
-                        lastAttempt = System.currentTimeMillis()
+            if (successCount > 0) {
+                try {
+                    NotificationHelper.showSyncNotification(
+                        applicationContext,
+                        "Synced $successCount request(s)${if (failCount > 0) ", $failCount failed" else ""}"
                     )
-                )
-                failCount++
+                } catch (e: Exception) {
+                    Log.e("SyncWorker", "Notification failed: ${e.message}")
+                }
             }
-        }
 
-        if (successCount > 0) {
-            NotificationHelper.showSyncNotification(
-                applicationContext,
-                "Synced $successCount request(s)${if (failCount > 0) ", $failCount failed" else ""}"
-            )
+            if (failCount > 0) Result.retry() else Result.success()
+        } catch (e: Exception) {
+            Log.e("SyncWorker", "SyncWorker crashed: ${e.message}", e)
+            Result.failure()
         }
-
-        return if (failCount > 0) Result.retry() else Result.success()
     }
 
     companion object {
         private const val WORK_NAME = "paysms_sync"
 
         fun enqueue(context: Context) {
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
+            try {
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
 
-            val workRequest = OneTimeWorkRequestBuilder<SyncWorker>()
-                .setConstraints(constraints)
-                .build()
+                val workRequest = OneTimeWorkRequestBuilder<SyncWorker>()
+                    .setConstraints(constraints)
+                    .build()
 
-            WorkManager.getInstance(context)
-                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, workRequest)
+                WorkManager.getInstance(context)
+                    .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, workRequest)
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Failed to enqueue sync: ${e.message}")
+            }
         }
     }
 }

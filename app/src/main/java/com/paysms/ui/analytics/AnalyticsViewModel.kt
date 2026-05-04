@@ -1,6 +1,7 @@
 package com.paysms.ui.analytics
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.paysms.PaySmsApp
@@ -41,56 +42,69 @@ class AnalyticsViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun loadAnalytics() {
         viewModelScope.launch {
-            val startTime = when (_state.value.selectedPeriod) {
-                "week" -> DateUtils.getDaysAgo(7)
-                "month" -> DateUtils.getStartOfMonth()
-                else -> 0L
-            }
-
-            repository.getAllTransactions().collectLatest { allTransactions ->
-                val filtered = if (startTime > 0) {
-                    allTransactions.filter { it.timestamp >= startTime }
-                } else {
-                    allTransactions
+            try {
+                val startTime = when (_state.value.selectedPeriod) {
+                    "week" -> DateUtils.getDaysAgo(7)
+                    "month" -> DateUtils.getStartOfMonth()
+                    else -> 0L
                 }
 
-                val credits = filtered.filter { it.transactionType == TransactionType.CREDIT }
-                val debits = filtered.filter { it.transactionType == TransactionType.DEBIT }
+                repository.getAllTransactions().collectLatest { allTransactions ->
+                    try {
+                        val filtered = if (startTime > 0) {
+                            allTransactions.filter { it.timestamp >= startTime }
+                        } else {
+                            allTransactions
+                        }
 
-                val totalReceived = credits.sumOf { it.amount }
-                val totalSent = debits.sumOf { it.amount }
+                        val credits = filtered.filter { it.transactionType == TransactionType.CREDIT }
+                        val debits = filtered.filter { it.transactionType == TransactionType.DEBIT }
 
-                val bankDist = credits.groupBy { it.bankName }
-                    .map { (bank, txns) -> bank to txns.sumOf { it.amount } }
-                    .sortedByDescending { it.second }
+                        val totalReceived = credits.sumOf { it.amount }
+                        val totalSent = debits.sumOf { it.amount }
 
-                val dailyData = buildDailyData(allTransactions)
+                        val bankDist = credits.groupBy { it.bankName }
+                            .map { (bank, txns) -> bank to txns.sumOf { it.amount } }
+                            .sortedByDescending { it.second }
 
-                _state.value = _state.value.copy(
-                    totalReceived = totalReceived,
-                    totalSent = totalSent,
-                    transactionCount = filtered.size,
-                    averageTransaction = if (credits.isNotEmpty()) totalReceived / credits.size else 0.0,
-                    dailyData = dailyData,
-                    bankDistribution = bankDist
-                )
+                        val dailyData = buildDailyData(allTransactions)
+
+                        _state.value = _state.value.copy(
+                            totalReceived = totalReceived,
+                            totalSent = totalSent,
+                            transactionCount = filtered.size,
+                            averageTransaction = if (credits.isNotEmpty()) totalReceived / credits.size else 0.0,
+                            dailyData = dailyData,
+                            bankDistribution = bankDist
+                        )
+                    } catch (e: Exception) {
+                        Log.e("AnalyticsVM", "Error processing analytics: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("AnalyticsVM", "Error loading analytics: ${e.message}")
             }
         }
     }
 
     private fun buildDailyData(transactions: List<Transaction>): List<Pair<String, Double>> {
-        val result = mutableListOf<Pair<String, Double>>()
-        for (i in 6 downTo 0) {
-            val dayStart = DateUtils.getDaysAgo(i)
-            val dayEnd = if (i == 0) System.currentTimeMillis() else DateUtils.getDaysAgo(i - 1)
-            val total = transactions
-                .filter {
-                    it.timestamp in dayStart until dayEnd &&
-                        it.transactionType == TransactionType.CREDIT
-                }
-                .sumOf { it.amount }
-            result.add(DateUtils.formatDate(dayStart).takeLast(5) to total)
+        return try {
+            val result = mutableListOf<Pair<String, Double>>()
+            for (i in 6 downTo 0) {
+                val dayStart = DateUtils.getDaysAgo(i)
+                val dayEnd = if (i == 0) System.currentTimeMillis() else DateUtils.getDaysAgo(i - 1)
+                val total = transactions
+                    .filter {
+                        it.timestamp in dayStart until dayEnd &&
+                            it.transactionType == TransactionType.CREDIT
+                    }
+                    .sumOf { it.amount }
+                result.add(DateUtils.formatDate(dayStart).takeLast(5) to total)
+            }
+            result
+        } catch (e: Exception) {
+            Log.e("AnalyticsVM", "Error building daily data: ${e.message}")
+            emptyList()
         }
-        return result
     }
 }
