@@ -1,0 +1,56 @@
+{
+  "format": "jqz",
+  "schemaVersion": "1.0",
+  "createdWith": "JsonQuizzz Android",
+  "exportedAt": 1700000000000,
+  "quiz": {
+    "id": "sample-001",
+    "title": "Sample Quiz - Getting Started",
+    "description": "A sample quiz demonstrating the .jqz file format",
+    "author": "JsonQuizzz Team",
+    "category": "GENERAL",
+    "difficulty": "EASY",
+    "sections": [
+      {
+        "id": "section-001",
+        "title": "Sample Questions",
+        "description": "Various question types demo",
+        "questions": [
+          {
+            "id": "q-001",
+            "type": "MULTIPLE_CHOICE",
+            "text": "What file format does JsonQuizzz use?",
+            "options": [
+              { "id": "o1", "text": ".json", "isCorrect": false },
+              { "id": "o2", "text": ".jqz", "isCorrect": true },
+              { "id": "o3", "text": ".quiz", "isCorrect": false },
+              { "id": "o4", "text": ".xml", "isCorrect": false }
+            ],
+            "correctAnswers": [".jqz"],
+            "explanation": "JsonQuizzz uses the .jqz custom file format",
+            "hint": "Look at the file extension",
+            "points": 1,
+            "tags": ["jsonquizzz", "basics"],
+            "difficulty": "EASY"
+          },
+          {
+            "id": "q-002",
+            "type": "TRUE_FALSE",
+            "text": "JsonQuizzz supports offline mode",
+            "correctAnswers": ["True"],
+            "explanation": "Yes! JsonQuizzz works fully offline with local storage",
+            "points": 1,
+            "tags": ["features"],
+            "difficulty": "EASY"
+          }
+        ],
+        "order": 0
+      }
+    ],
+    "tags": ["sample", "demo"],
+    "createdAt": 1700000000000,
+    "version": "1.0",
+    "shuffleQuestions": false,
+    "shuffleOptions": false
+  }
+}
