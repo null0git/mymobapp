@@ -89,6 +89,7 @@ data class QuickAction(
     val iconColor: Color = TelebirrGreen
 )
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     userPreferences: UserPreferences,
