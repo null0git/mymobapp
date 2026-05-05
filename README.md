@@ -1,79 +1,57 @@
-# PaySMS - Smart Payment Verification via SMS
+# telebirr SuperApp Clone
 
-A lightweight, professional payment verification system that automatically detects, parses, and processes bank/payment SMS messages on Android.
+A mobile app clone of the telebirr SuperApp by Ethio Telecom, built with Kotlin and Jetpack Compose.
 
 ## Features
 
-### Payment Detection System
-- Automatic SMS detection via BroadcastReceiver
-- Filters bank/payment messages from noise
-- Supports multiple Ethiopian banks (CBE, Abay, Telebirr, Awash, Dashen, BOA, Wegagen, Oromia)
+### Login Screen
+- Phone number input with +251 country code prefix
+- Auto-fills phone number after first login
+- Biometric authentication (fingerprint) for returning users
+- Clean, branded UI matching telebirr design
 
-### Smart Data Extraction
-- **Amount** (ETB/Birr)
-- **Sender name**
-- **Bank name**
-- **Account number** (masked)
-- **Date & time**
-- **Transaction type** (credit/debit)
+### Home Screen
+- User greeting with avatar
+- Balance display (ETB) with show/hide toggle
+- Endekise and Reward balance display
+- Service grid: Send Money, Buy Airtime, Buy Package, Cash In/Out, Financial Service, Pay for Merchant, Payment, Apps
+- Promotional banner carousel
+- Transaction Details link
+- Quick actions: Pay Ethio telecom Bill, Schedule Payment, Transfer to Bank, Transfer to Wallet
+- Scan QR button
 
-### API Integration
-- Configurable endpoint URL
-- POST / GET / PUT methods
-- Custom headers and API key/token
-- JSON payload
+### Payment Screen
+- Expandable payment categories with sub-items:
+  - Utility, Tax & Government Service, Transport Service
+  - Entertainment Service, E-commerce, Event & Ticketing
+  - Education Fee, Fundraising, Insurance
+- Search functionality
+- Financial services promotional banner
 
-### Email Notifications
-- SMTP-based email alerts on payment received
-- Fully configurable sender/receiver/host/port
+### Apps Screen
+- Grid of third-party apps: My Ethiotel, Telegebeya, Ethiopian Airlines, DSTV, Public Transport, WebSprix, Zmall, Ahun, Digital Equb, Tikus Delivery, Hulu beje, Ashewa
+- Additional apps section: Guzo Go, ACT American, AfroRead, Awra Store, MoveEt, Safe
+- Promotional banner
 
-### Offline Mode
-- Stores transactions locally when offline
-- Auto-syncs via WorkManager when internet returns
-- Retry mechanism with configurable max retries
-
-### Duplicate Protection
-- SHA-256 hash-based SMS deduplication
-- Prevents sending the same transaction twice
-
-### Notification System
-- Real-time alerts when payments arrive
-- Sync status notifications
-
-### Multi-Bank Support
-- 8 predefined Ethiopian bank patterns
-- Custom bank rule creation via UI
-- Configurable keywords and amount patterns
-
-### AI Detection (Optional)
-- Toggle on/off
-- Configurable confidence threshold
-
-## UI Screens
-
-| Screen | Description |
-|--------|-------------|
-| **Dashboard** | Total received/sent today, transaction count, weekly bar chart, bank summary |
-| **History** | Full transaction list with search, bank filter, and detail bottom sheet |
-| **Analytics** | Time-period stats (week/month/all), daily income chart, bank distribution |
-| **Settings** | API config, email SMTP, SMS filters, bank rules, AI toggle, notifications |
+### Account Screen
+- User profile with avatar, name, and phone number
+- Menu items: My Profile, My Cards, Transaction History, Biometric Settings, Change PIN, Notifications, Language
+- Additional: Invite Friends, Rate Us, Help & Support, About
+- **Hidden Settings**: Tap "Version 1.0.0" text 7 times to reveal editable fields for all account details (Display Name, Full Name, Phone, Email, Account Number, Balance, Endekise Balance, Reward Balance, Gender, Date of Birth, Region, City)
+- Logout button
 
 ## Tech Stack
 
 - **Language**: Kotlin
 - **UI**: Jetpack Compose + Material 3
-- **Database**: Room (SQLite)
-- **Background**: WorkManager
-- **Networking**: OkHttp
-- **Email**: JavaMail (SMTP)
-- **Settings**: DataStore Preferences
+- **Authentication**: AndroidX Biometric
+- **Storage**: DataStore Preferences
 - **Navigation**: Jetpack Navigation Compose
 - **Architecture**: MVVM
 
 ## Requirements
 
 - Android 8.0+ (API 26)
-- SMS permissions
 
 ## Build
 
@@ -82,16 +60,6 @@ A lightweight, professional payment verification system that automatically detec
 ```
 
 The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
-
-## Permissions
-
-The app requires:
-- `RECEIVE_SMS` - Listen for incoming SMS
-- `READ_SMS` - Parse SMS content
-- `INTERNET` - Send API requests and emails
-- `ACCESS_NETWORK_STATE` - Check connectivity for offline mode
-- `POST_NOTIFICATIONS` - Show payment alerts
-- `RECEIVE_BOOT_COMPLETED` - Restart SMS listener on device reboot
 
 ## License
 

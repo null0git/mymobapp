@@ -103,9 +103,15 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
-    // JavaMail for SMTP
-    implementation("com.sun.mail:android-mail:1.6.7")
-    implementation("com.sun.mail:android-activation:1.6.7")
+    // Fragment (for BiometricPrompt)
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
+
+    // Biometric Authentication
+    implementation("androidx.biometric:biometric:1.1.0")
+
+    // Accompanist (Pager for carousel)
+    implementation("com.google.accompanist:accompanist-pager:0.32.0")
+    implementation("com.google.accompanist:accompanist-pager-indicators:0.32.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
