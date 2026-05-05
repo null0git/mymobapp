@@ -90,7 +90,11 @@ data class QuickAction(
 )
 
 @Composable
-fun HomeScreen(userPreferences: UserPreferences) {
+fun HomeScreen(
+    userPreferences: UserPreferences,
+    onSendMoney: () -> Unit = {},
+    onTransactionDetails: () -> Unit = {}
+) {
     val userName by userPreferences.userName.collectAsState(initial = "User")
     val balance by userPreferences.balance.collectAsState(initial = "******")
     val endekiseBalance by userPreferences.endekiseBalance.collectAsState(initial = "******")
@@ -313,7 +317,12 @@ fun HomeScreen(userPreferences: UserPreferences) {
                         for (colIndex in 0 until 4) {
                             val index = rowIndex * 4 + colIndex
                             if (index < services.size) {
-                                ServiceItemCard(services[index])
+                                ServiceItemCard(
+                                    service = services[index],
+                                    onClick = {
+                                        if (services[index].name == "Send Money") onSendMoney()
+                                    }
+                                )
                             }
                         }
                     }
@@ -371,6 +380,7 @@ fun HomeScreen(userPreferences: UserPreferences) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable { onTransactionDetails() }
                     .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
@@ -433,12 +443,12 @@ fun HomeScreen(userPreferences: UserPreferences) {
 }
 
 @Composable
-private fun ServiceItemCard(service: ServiceItem) {
+private fun ServiceItemCard(service: ServiceItem, onClick: () -> Unit = {}) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(80.dp)
-            .clickable { }
+            .clickable { onClick() }
     ) {
         Box {
             Box(
