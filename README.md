@@ -1,79 +1,48 @@
-# PaySMS - Smart Payment Verification via SMS
+# JsonQuizzz — Android
 
-A lightweight, professional payment verification system that automatically detects, parses, and processes bank/payment SMS messages on Android.
+> Turn any JSON into an interactive quiz — now in your pocket.
 
-## Features
-
-### Payment Detection System
-- Automatic SMS detection via BroadcastReceiver
-- Filters bank/payment messages from noise
-- Supports multiple Ethiopian banks (CBE, Abay, Telebirr, Awash, Dashen, BOA, Wegagen, Oromia)
-
-### Smart Data Extraction
-- **Amount** (ETB/Birr)
-- **Sender name**
-- **Bank name**
-- **Account number** (masked)
-- **Date & time**
-- **Transaction type** (credit/debit)
-
-### API Integration
-- Configurable endpoint URL
-- POST / GET / PUT methods
-- Custom headers and API key/token
-- JSON payload
-
-### Email Notifications
-- SMTP-based email alerts on payment received
-- Fully configurable sender/receiver/host/port
-
-### Offline Mode
-- Stores transactions locally when offline
-- Auto-syncs via WorkManager when internet returns
-- Retry mechanism with configurable max retries
-
-### Duplicate Protection
-- SHA-256 hash-based SMS deduplication
-- Prevents sending the same transaction twice
-
-### Notification System
-- Real-time alerts when payments arrive
-- Sync status notifications
-
-### Multi-Bank Support
-- 8 predefined Ethiopian bank patterns
-- Custom bank rule creation via UI
-- Configurable keywords and amount patterns
-
-### AI Detection (Optional)
-- Toggle on/off
-- Configurable confidence threshold
-
-## UI Screens
-
-| Screen | Description |
-|--------|-------------|
-| **Dashboard** | Total received/sent today, transaction count, weekly bar chart, bank summary |
-| **History** | Full transaction list with search, bank filter, and detail bottom sheet |
-| **Analytics** | Time-period stats (week/month/all), daily income chart, bank distribution |
-| **Settings** | API config, email SMTP, SMS filters, bank rules, AI toggle, notifications |
+A native Android port of the [JsonQuizzz](https://jsonquizzz.app) web platform. Same visual identity, same JSON schema, same 18+ question types, same Practice/Test modes — rebuilt natively with Jetpack Compose for performance, offline use, and Play Store distribution.
 
 ## Tech Stack
 
-- **Language**: Kotlin
-- **UI**: Jetpack Compose + Material 3
-- **Database**: Room (SQLite)
-- **Background**: WorkManager
-- **Networking**: OkHttp
-- **Email**: JavaMail (SMTP)
-- **Settings**: DataStore Preferences
-- **Navigation**: Jetpack Navigation Compose
-- **Architecture**: MVVM
+| Layer | Choice |
+|---|---|
+| Language | Kotlin 2.0 + Coroutines + Flow |
+| UI | Jetpack Compose + Material 3 |
+| Navigation | Navigation-Compose (type-safe routes) |
+| Architecture | MVVM + Clean Architecture |
+| DI | Hilt |
+| JSON | Kotlinx Serialization |
+| Local DB | Room + DataStore |
+| Networking | OkHttp |
+
+## Project Structure
+
+```
+JsonQuizzz/
+├── app/                    ← Main application module
+├── core/
+│   ├── design-system/      ← Theme, tokens, reusable components
+│   ├── common/             ← Result, Dispatchers, extensions
+│   └── testing/            ← Test fixtures
+├── domain/                 ← Models, use cases, parser
+├── data/                   ← Room, DataStore, repositories
+└── feature/
+    ├── quiz-player/        ← Quiz playing, setup, results
+    ├── quiz-create/        ← JSON input, file import
+    ├── library/            ← Saved quizzes
+    ├── analytics/          ← Student dashboard
+    ├── sharing/            ← Share & receive quizzes
+    ├── leaderboard/        ← Shared quiz leaderboards
+    ├── prompt-builder/     ← LLM prompt generator
+    └── auth/               ← Profile & settings
+```
 
 ## Requirements
 
-- Android 8.0+ (API 26)
-- SMS permissions
+- Android 7.0+ (API 24)
+- JDK 17
 
 ## Build
 
@@ -83,16 +52,30 @@ A lightweight, professional payment verification system that automatically detec
 
 The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Permissions
+## Question Types Supported
 
-The app requires:
-- `RECEIVE_SMS` - Listen for incoming SMS
-- `READ_SMS` - Parse SMS content
-- `INTERNET` - Send API requests and emails
-- `ACCESS_NETWORK_STATE` - Check connectivity for offline mode
-- `POST_NOTIFICATIONS` - Show payment alerts
-- `RECEIVE_BOOT_COMPLETED` - Restart SMS listener on device reboot
+1. Multiple Choice (Single)
+2. Multiple Choice (Multiple)
+3. Multiple Choice (Image)
+4. True/False
+5. Numeric (with tolerance)
+6. Short Answer
+7. Matching (drag-drop)
+8. Fill in the Blank
+9. Word Bank
+10. Ordering
+11. Error Identification
+12. Reading Comprehension
+13. Highlight Word
+14. Audio Question
+15. Picture Question
+16. Video Question
+17. Crossword
+18. Multi-Part
+19. Graph Question
+
+Unknown question types fall back gracefully to `RawJson` — old/new schemas never crash the app.
 
 ## License
 
-MIT
+Proprietary — jsonquizzz@gmail.com

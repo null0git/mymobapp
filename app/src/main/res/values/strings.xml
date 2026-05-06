@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">PaySMS</string>
+    <string name="app_name">JsonQuizzz</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_library">Library</string>
+    <string name="nav_create">Create</string>
+    <string name="nav_analytics">Analytics</string>
+    <string name="nav_profile">Profile</string>
+    <string name="quiz_practice_mode">Practice Mode</string>
+    <string name="quiz_test_mode">Test Mode</string>
+    <string name="no_quizzes_yet">No quizzes yet</string>
+    <string name="create_first_quiz">Tap + to create your first quiz</string>
+    <string name="search_quizzes">Search quizzes…</string>
+    <string name="share_quiz">Share Quiz</string>
+    <string name="review_answers">Review Answers</string>
+    <string name="try_again">Try Again</string>
+    <string name="back_to_home">Back to Home</string>
+    <string name="quiz_complete">Quiz Complete!</string>
+    <string name="welcome_title">Welcome to JsonQuizzz!</string>
+    <string name="welcome_subtitle">Turn any JSON into an interactive quiz — now in your pocket.</string>
 </resources>
