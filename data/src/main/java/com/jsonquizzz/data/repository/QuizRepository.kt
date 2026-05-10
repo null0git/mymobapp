@@ -49,6 +49,11 @@ class QuizRepository @Inject constructor(
         quizDao.updateQuiz(quiz.copy(isFavorite = !quiz.isFavorite))
     }
 
+    suspend fun toggleFavorite(id: String, isFavorite: Boolean) {
+        val quiz = quizDao.getQuizById(id) ?: return
+        quizDao.updateQuiz(quiz.copy(isFavorite = isFavorite))
+    }
+
     suspend fun recordPlay(id: String) {
         val quiz = quizDao.getQuizById(id) ?: return
         quizDao.updateQuiz(

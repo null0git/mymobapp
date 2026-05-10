@@ -32,6 +32,7 @@ dependencies {
     implementation(project(":core:design-system"))
     implementation(project(":core:common"))
     implementation(project(":domain"))
+    implementation(project(":data"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

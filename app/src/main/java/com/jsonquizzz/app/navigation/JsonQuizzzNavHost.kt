@@ -8,11 +8,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.jsonquizzz.app.ui.HomeScreen
 import com.jsonquizzz.feature.analytics.AnalyticsScreen
+import com.jsonquizzz.feature.auth.FAQScreen
+import com.jsonquizzz.feature.auth.HowToUseScreen
 import com.jsonquizzz.feature.auth.ProfileScreen
 import com.jsonquizzz.feature.leaderboard.LeaderboardScreen
 import com.jsonquizzz.feature.library.LibraryScreen
 import com.jsonquizzz.feature.promptbuilder.PromptBuilderScreen
 import com.jsonquizzz.feature.quizcreate.CreateScreen
+import com.jsonquizzz.feature.quizcreate.FileImportScreen
+import com.jsonquizzz.feature.quizcreate.JsonInputScreen
 import com.jsonquizzz.feature.quizplayer.QuizPlayerScreen
 import com.jsonquizzz.feature.quizplayer.QuizResultsScreen
 import com.jsonquizzz.feature.quizplayer.QuizSetupScreen
@@ -39,11 +43,11 @@ fun JsonQuizzzNavHost(
 
         composable<NavRoute.Library> {
             LibraryScreen(
-                onNavigateToCreate = {
-                    navController.navigate(NavRoute.Create)
-                },
-                onNavigateToQuiz = { quizId ->
+                onQuizSelected = { quizId ->
                     navController.navigate(NavRoute.QuizSetup(quizId))
+                },
+                onCreateQuiz = {
+                    navController.navigate(NavRoute.Create)
                 },
             )
         }
@@ -62,16 +66,49 @@ fun JsonQuizzzNavHost(
             )
         }
 
+        composable<NavRoute.JsonInput> {
+            JsonInputScreen(
+                onQuizCreated = { quizId ->
+                    navController.navigate(NavRoute.QuizSetup(quizId)) {
+                        popUpTo(NavRoute.Create)
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable<NavRoute.FileImport> {
+            FileImportScreen(
+                onQuizCreated = { quizId ->
+                    navController.navigate(NavRoute.QuizSetup(quizId)) {
+                        popUpTo(NavRoute.Create)
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
         composable<NavRoute.Analytics> {
             AnalyticsScreen()
         }
 
         composable<NavRoute.Profile> {
             ProfileScreen(
-                onNavigateToSettings = {
-                    navController.navigate(NavRoute.Settings)
+                onNavigateToFAQ = {
+                    navController.navigate(NavRoute.FAQ)
+                },
+                onNavigateToHowToUse = {
+                    navController.navigate(NavRoute.HowToUse)
                 },
             )
+        }
+
+        composable<NavRoute.FAQ> {
+            FAQScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable<NavRoute.HowToUse> {
+            HowToUseScreen(onBack = { navController.popBackStack() })
         }
 
         composable<NavRoute.PromptBuilder> {
@@ -84,11 +121,8 @@ fun JsonQuizzzNavHost(
             val route = backStackEntry.toRoute<NavRoute.QuizSetup>()
             QuizSetupScreen(
                 quizId = route.quizId,
-                onStartPractice = {
-                    navController.navigate(NavRoute.QuizPlayer(route.quizId, "practice"))
-                },
-                onStartTest = {
-                    navController.navigate(NavRoute.QuizPlayer(route.quizId, "test"))
+                onStartQuiz = { id, mode ->
+                    navController.navigate(NavRoute.QuizPlayer(id, mode))
                 },
                 onBack = { navController.popBackStack() },
             )
@@ -109,19 +143,21 @@ fun JsonQuizzzNavHost(
 
         composable<NavRoute.QuizResults> {
             QuizResultsScreen(
-                onReview = { navController.navigate(NavRoute.QuizReview) },
-                onRetry = { navController.popBackStack() },
-                onHome = {
+                onGoHome = {
                     navController.navigate(NavRoute.Home) {
                         popUpTo(NavRoute.Home) { inclusive = true }
                     }
                 },
+                onTryAgain = { navController.popBackStack() },
             )
         }
 
         composable<NavRoute.ShareQuiz> { backStackEntry ->
             val route = backStackEntry.toRoute<NavRoute.ShareQuiz>()
-            ShareQuizScreen(quizId = route.quizId)
+            ShareQuizScreen(
+                quizId = route.quizId,
+                onBack = { navController.popBackStack() },
+            )
         }
 
         composable<NavRoute.ShareReceive> { backStackEntry ->
