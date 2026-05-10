@@ -12,12 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Speed
@@ -34,23 +32,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.jsonquizzz.core.designsystem.component.JsonQuizzzCard
-import com.jsonquizzz.data.local.QuizResultEntity
-import com.jsonquizzz.data.repository.QuizRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(
     modifier: Modifier = Modifier,
-    quizRepository: QuizRepository? = null,
+    viewModel: AnalyticsViewModel = hiltViewModel(),
 ) {
-    val results by (quizRepository?.getRecentResults(50) ?: kotlinx.coroutines.flow.flowOf(emptyList()))
-        .collectAsState(initial = emptyList())
+    val results by viewModel.results.collectAsState()
 
     Scaffold(
         topBar = {
@@ -94,9 +89,8 @@ fun AnalyticsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Summary stats
             val totalAttempts = results.size
-            val avgScore = if (results.isNotEmpty()) results.map { it.percentage }.average() else 0.0
+            val avgScore = results.map { it.percentage }.average()
             val bestScore = results.maxOfOrNull { it.percentage } ?: 0.0
             val totalTime = results.sumOf { it.timeTakenSeconds }
 
@@ -135,7 +129,6 @@ fun AnalyticsScreen(
                 )
             }
 
-            // Performance chart
             Text(
                 text = "Score Over Time",
                 style = MaterialTheme.typography.titleMedium,
@@ -149,7 +142,6 @@ fun AnalyticsScreen(
                     .aspectRatio(2f),
             )
 
-            // Recent results
             Text(
                 text = "Recent Results",
                 style = MaterialTheme.typography.titleMedium,
@@ -227,13 +219,11 @@ private fun PerformanceChart(
                 val maxScore = 100f
                 val stepX = if (scores.size > 1) w / (scores.size - 1) else w
 
-                // Grid lines
                 for (i in 0..4) {
                     val y = h - (i * h / 4)
                     drawLine(surfaceColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
                 }
 
-                // Line chart
                 if (scores.size > 1) {
                     for (i in 0 until scores.size - 1) {
                         val x1 = i * stepX
@@ -244,11 +234,10 @@ private fun PerformanceChart(
                     }
                 }
 
-                // Dots
                 scores.forEachIndexed { i, score ->
                     val x = i * stepX
                     val y = h - (score / maxScore * h)
-                    drawCircle(primaryColor, radius = 5f, center = Offset(x, y))
+                    drawCircle(primaryColor, radius = 6f, center = Offset(x, y))
                 }
             }
         }
@@ -256,12 +245,9 @@ private fun PerformanceChart(
 }
 
 private fun formatDuration(seconds: Long): String {
-    val h = seconds / 3600
-    val m = (seconds % 3600) / 60
-    val s = seconds % 60
     return when {
-        h > 0 -> "${h}h ${m}m"
-        m > 0 -> "${m}m ${s}s"
-        else -> "${s}s"
+        seconds < 60 -> "${seconds}s"
+        seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
+        else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
     }
 }

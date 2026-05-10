@@ -15,7 +15,7 @@ sealed interface NavRoute {
 
     @Serializable data class QuizSetup(val quizId: String) : NavRoute
     @Serializable data class QuizPlayer(val quizId: String, val mode: String = "practice") : NavRoute
-    @Serializable data object QuizResults : NavRoute
+    @Serializable data class QuizResults(val quizId: String) : NavRoute
     @Serializable data object QuizReview : NavRoute
 
     @Serializable data class ShareQuiz(val quizId: String) : NavRoute

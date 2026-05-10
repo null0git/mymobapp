@@ -1,6 +1,7 @@
 package com.jsonquizzz.feature.quizplayer
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,10 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.jsonquizzz.core.designsystem.component.JsonQuizzzCard
-import com.jsonquizzz.data.repository.QuizRepository
-import com.jsonquizzz.domain.model.Quiz
-import com.jsonquizzz.domain.parser.QuizParser
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,21 +50,20 @@ fun QuizSetupScreen(
     onStartQuiz: (String, String) -> Unit,
     onBack: () -> Unit = {},
     modifier: Modifier = Modifier,
-    quizRepository: QuizRepository? = null,
+    viewModel: QuizPlayerViewModel = hiltViewModel(),
 ) {
-    var quiz by remember { mutableStateOf<Quiz?>(null) }
+    val state by viewModel.state.collectAsState()
+    val quizLoaded by viewModel.quizLoaded.collectAsState()
+    val loadError by viewModel.loadError.collectAsState()
     var selectedMode by remember { mutableStateOf("practice") }
     var shuffleQuestions by remember { mutableStateOf(false) }
     var shuffleOptions by remember { mutableStateOf(false) }
 
     LaunchedEffect(quizId) {
-        if (quizRepository != null) {
-            val entity = quizRepository.getQuizById(quizId)
-            if (entity != null) {
-                QuizParser.parse(entity.jsonContent).onSuccess { quiz = it }
-            }
-        }
+        viewModel.loadQuizForSetup(quizId)
     }
+
+    val quiz = if (quizLoaded) state.quiz else null
 
     Scaffold(
         topBar = {
@@ -78,6 +78,30 @@ fun QuizSetupScreen(
         },
         modifier = modifier,
     ) { padding ->
+        if (loadError != null) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(loadError ?: "Error loading quiz", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = onBack) { Text("Go Back") }
+                }
+            }
+            return@Scaffold
+        }
+
+        if (!quizLoaded) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+            return@Scaffold
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -86,11 +110,10 @@ fun QuizSetupScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Quiz info card
             JsonQuizzzCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        text = quiz?.title ?: "Loading...",
+                        text = quiz?.title ?: "",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                     )
@@ -124,7 +147,6 @@ fun QuizSetupScreen(
                 }
             }
 
-            // Mode selection
             Text(text = "Select Mode", style = MaterialTheme.typography.titleMedium)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -152,7 +174,6 @@ fun QuizSetupScreen(
                 }
             }
 
-            // Description of selected mode
             JsonQuizzzCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     if (selectedMode == "practice") {
@@ -173,7 +194,6 @@ fun QuizSetupScreen(
                 }
             }
 
-            // Options
             Text(text = "Options", style = MaterialTheme.typography.titleMedium)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -196,8 +216,9 @@ fun QuizSetupScreen(
 
             Button(
                 onClick = { onStartQuiz(quizId, selectedMode) },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                enabled = quiz != null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))

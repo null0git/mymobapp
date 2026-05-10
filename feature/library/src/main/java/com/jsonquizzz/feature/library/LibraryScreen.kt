@@ -1,6 +1,5 @@
 package com.jsonquizzz.feature.library
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +19,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -40,16 +38,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.jsonquizzz.core.designsystem.component.JsonQuizzzCard
 import com.jsonquizzz.data.local.QuizEntity
-import com.jsonquizzz.data.repository.QuizRepository
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,28 +56,14 @@ fun LibraryScreen(
     onQuizSelected: (String) -> Unit = {},
     onCreateQuiz: () -> Unit = {},
     modifier: Modifier = Modifier,
-    quizRepository: QuizRepository? = null,
+    viewModel: LibraryViewModel = hiltViewModel(),
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var searchActive by remember { mutableStateOf(false) }
-    var showFavoritesOnly by remember { mutableStateOf(false) }
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val showFavoritesOnly by viewModel.showFavoritesOnly.collectAsState()
+    val displayedQuizzes by viewModel.displayedQuizzes.collectAsState()
+    val allQuizzes by viewModel.allQuizzes.collectAsState()
+    val favorites by viewModel.favorites.collectAsState()
     var deleteDialog by remember { mutableStateOf<QuizEntity?>(null) }
-    val scope = rememberCoroutineScope()
-
-    val allQuizzes by (quizRepository?.getAllQuizzes() ?: kotlinx.coroutines.flow.flowOf(emptyList()))
-        .collectAsState(initial = emptyList())
-    val favorites by (quizRepository?.getFavorites() ?: kotlinx.coroutines.flow.flowOf(emptyList()))
-        .collectAsState(initial = emptyList())
-    val searchResults by (if (searchQuery.isNotBlank()) quizRepository?.searchQuizzes(searchQuery)
-        ?: kotlinx.coroutines.flow.flowOf(emptyList())
-    else kotlinx.coroutines.flow.flowOf(emptyList()))
-        .collectAsState(initial = emptyList())
-
-    val displayedQuizzes = when {
-        searchQuery.isNotBlank() -> searchResults
-        showFavoritesOnly -> favorites
-        else -> allQuizzes
-    }
 
     Scaffold(
         topBar = {
@@ -99,11 +81,10 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // Search bar
             SearchBar(
                 query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                onSearch = { searchActive = false },
+                onQueryChange = { viewModel.setSearchQuery(it) },
+                onSearch = { },
                 active = false,
                 onActiveChange = {},
                 modifier = Modifier
@@ -113,19 +94,18 @@ fun LibraryScreen(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             ) {}
 
-            // Filter chips
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilterChip(
                     selected = !showFavoritesOnly,
-                    onClick = { showFavoritesOnly = false },
+                    onClick = { viewModel.setShowFavoritesOnly(false) },
                     label = { Text("All (${allQuizzes.size})") },
                 )
                 FilterChip(
                     selected = showFavoritesOnly,
-                    onClick = { showFavoritesOnly = true },
+                    onClick = { viewModel.setShowFavoritesOnly(true) },
                     label = { Text("Favorites (${favorites.size})") },
                     leadingIcon = {
                         Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -170,9 +150,7 @@ fun LibraryScreen(
                             quiz = quiz,
                             onTap = { onQuizSelected(quiz.id) },
                             onToggleFavorite = {
-                                scope.launch {
-                                    quizRepository?.toggleFavorite(quiz.id, !quiz.isFavorite)
-                                }
+                                viewModel.toggleFavorite(quiz.id, !quiz.isFavorite)
                             },
                             onDelete = { deleteDialog = quiz },
                         )
@@ -189,7 +167,7 @@ fun LibraryScreen(
             text = { Text("\"${quiz.title}\" will be permanently deleted.") },
             confirmButton = {
                 TextButton(onClick = {
-                    scope.launch { quizRepository?.deleteQuiz(quiz.id) }
+                    viewModel.deleteQuiz(quiz.id)
                     deleteDialog = null
                 }) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
@@ -243,12 +221,12 @@ private fun QuizListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
             IconButton(onClick = onToggleFavorite) {
                 Icon(
-                    if (quiz.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = "Favorite",
-                    tint = if (quiz.isFavorite) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    imageVector = if (quiz.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Toggle favorite",
+                    tint = if (quiz.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = onDelete) {

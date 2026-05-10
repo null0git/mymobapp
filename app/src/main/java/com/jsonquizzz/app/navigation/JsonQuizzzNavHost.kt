@@ -134,21 +134,27 @@ fun JsonQuizzzNavHost(
                 quizId = route.quizId,
                 mode = route.mode,
                 onFinish = {
-                    navController.navigate(NavRoute.QuizResults) {
+                    navController.navigate(NavRoute.QuizResults(route.quizId)) {
                         popUpTo(NavRoute.Home)
                     }
                 },
             )
         }
 
-        composable<NavRoute.QuizResults> {
+        composable<NavRoute.QuizResults> { backStackEntry ->
+            val route = backStackEntry.toRoute<NavRoute.QuizResults>()
             QuizResultsScreen(
+                quizId = route.quizId,
                 onGoHome = {
                     navController.navigate(NavRoute.Home) {
                         popUpTo(NavRoute.Home) { inclusive = true }
                     }
                 },
-                onTryAgain = { navController.popBackStack() },
+                onTryAgain = {
+                    navController.navigate(NavRoute.QuizSetup(route.quizId)) {
+                        popUpTo(NavRoute.Home)
+                    }
+                },
             )
         }
 

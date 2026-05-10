@@ -29,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,9 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.jsonquizzz.data.repository.QuizRepository
 import com.jsonquizzz.domain.model.QuizMode
-import com.jsonquizzz.domain.parser.QuizParser
 import com.jsonquizzz.feature.quizplayer.cards.QuestionCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,36 +63,41 @@ fun QuizPlayerScreen(
     onFinish: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: QuizPlayerViewModel = hiltViewModel(),
-    quizRepository: QuizRepository? = null,
 ) {
     val state by viewModel.state.collectAsState()
     val result by viewModel.result.collectAsState()
     val feedback by viewModel.feedbackState.collectAsState()
+    val quizLoaded by viewModel.quizLoaded.collectAsState()
+    val loadError by viewModel.loadError.collectAsState()
     var showExitDialog by remember { mutableStateOf(false) }
     var showHint by remember { mutableStateOf(false) }
 
-    LaunchedEffect(quizId) {
-        if (quizRepository != null) {
-            val entity = quizRepository.getQuizById(quizId)
-            if (entity != null) {
-                val quizResult = QuizParser.parse(entity.jsonContent)
-                quizResult.onSuccess { quiz ->
-                    val quizMode = if (mode == "test") QuizMode.TEST else QuizMode.PRACTICE
-                    viewModel.startQuiz(quiz, quizMode)
-                }
-            }
-        }
+    LaunchedEffect(quizId, mode) {
+        viewModel.loadAndStartQuiz(quizId, mode)
     }
 
     if (result != null && state.isFinished) {
-        onFinish()
+        LaunchedEffect(Unit) {
+            onFinish()
+        }
+        return
+    }
+
+    if (loadError != null) {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(loadError ?: "Error", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onFinish) { Text("Go Back") }
+            }
+        }
         return
     }
 
     val currentQuestion = state.currentQuestion
-    if (currentQuestion == null) {
+    if (currentQuestion == null || !quizLoaded) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Loading quiz...", style = MaterialTheme.typography.headlineSmall)
+            CircularProgressIndicator()
         }
         return
     }
@@ -227,7 +231,9 @@ fun QuizPlayerScreen(
 
                 AnimatedVisibility(visible = showHint && currentQuestion.hint != null) {
                     Card(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                         ),
@@ -241,7 +247,6 @@ fun QuizPlayerScreen(
                 }
             }
 
-            // Bottom action bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

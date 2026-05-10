@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.unit.dp
-import com.jsonquizzz.domain.parser.QuizParser
+import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,34 +41,21 @@ import kotlinx.coroutines.launch
 fun JsonInputScreen(
     onQuizCreated: (String) -> Unit = {},
     onBack: () -> Unit = {},
-    onSaveQuiz: (suspend (String) -> Result<String>)? = null,
     modifier: Modifier = Modifier,
+    viewModel: CreateViewModel = hiltViewModel(),
 ) {
     var jsonText by remember { mutableStateOf("") }
     var validationErrors by remember { mutableStateOf<List<String>>(emptyList()) }
     var isValid by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
 
     fun validate() {
-        if (jsonText.isBlank()) {
-            validationErrors = listOf("Please paste your quiz JSON")
-            isValid = false
-            return
-        }
-        val parseResult = QuizParser.parse(jsonText)
-        parseResult.fold(
-            onSuccess = { quiz ->
-                val errors = QuizParser.validate(quiz)
-                validationErrors = errors
-                isValid = errors.isEmpty()
-            },
-            onFailure = { e ->
-                validationErrors = listOf("Invalid JSON: ${e.message}")
-                isValid = false
-            },
-        )
+        val errors = viewModel.validateJson(jsonText)
+        validationErrors = errors
+        isValid = errors.isEmpty()
     }
 
     Scaffold(
@@ -127,25 +115,37 @@ fun JsonInputScreen(
             Button(
                 onClick = {
                     validate()
-                    if (isValid && onSaveQuiz != null) {
+                    if (isValid) {
+                        isSaving = true
                         scope.launch {
-                            onSaveQuiz(jsonText).fold(
+                            viewModel.saveQuiz(jsonText).fold(
                                 onSuccess = { id ->
+                                    isSaving = false
                                     snackbarHostState.showSnackbar("Quiz saved!")
                                     onQuizCreated(id)
                                 },
                                 onFailure = { e ->
+                                    isSaving = false
                                     snackbarHostState.showSnackbar("Error: ${e.message}")
                                 },
                             )
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                enabled = jsonText.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                enabled = jsonText.isNotBlank() && !isSaving,
             ) {
-                Icon(Icons.Default.Check, contentDescription = null)
-                Text("  Validate & Save")
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Icon(Icons.Default.Check, contentDescription = null)
+                    Text("  Validate & Save")
+                }
             }
         }
     }

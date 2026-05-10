@@ -1,8 +1,10 @@
 package com.jsonquizzz.feature.quizplayer
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.jsonquizzz.domain.model.Question
+import com.jsonquizzz.data.local.QuizResultEntity
+import com.jsonquizzz.data.repository.QuizRepository
 import com.jsonquizzz.domain.model.Quiz
 import com.jsonquizzz.domain.model.QuizMode
 import com.jsonquizzz.domain.model.QuizResult
@@ -10,6 +12,7 @@ import com.jsonquizzz.domain.model.QuizState
 import com.jsonquizzz.domain.model.ScoringEngine
 import com.jsonquizzz.domain.model.QuestionScore
 import com.jsonquizzz.domain.model.UserAnswer
+import com.jsonquizzz.domain.parser.QuizParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,7 +24,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class QuizPlayerViewModel @Inject constructor() : ViewModel() {
+class QuizPlayerViewModel @Inject constructor(
+    private val quizRepository: QuizRepository,
+) : ViewModel() {
 
     private val _state = MutableStateFlow(QuizState())
     val state: StateFlow<QuizState> = _state.asStateFlow()
@@ -32,7 +37,58 @@ class QuizPlayerViewModel @Inject constructor() : ViewModel() {
     private val _feedbackState = MutableStateFlow<FeedbackState?>(null)
     val feedbackState: StateFlow<FeedbackState?> = _feedbackState.asStateFlow()
 
+    private val _quizLoaded = MutableStateFlow(false)
+    val quizLoaded: StateFlow<Boolean> = _quizLoaded.asStateFlow()
+
+    private val _loadError = MutableStateFlow<String?>(null)
+    val loadError: StateFlow<String?> = _loadError.asStateFlow()
+
     private var timerJob: Job? = null
+    private var currentQuizId: String? = null
+
+    fun loadAndStartQuiz(quizId: String, mode: String) {
+        if (_quizLoaded.value && currentQuizId == quizId) return
+        currentQuizId = quizId
+
+        viewModelScope.launch {
+            val entity = quizRepository.getQuizById(quizId)
+            if (entity == null) {
+                _loadError.value = "Quiz not found"
+                return@launch
+            }
+            val parseResult = QuizParser.parse(entity.jsonContent)
+            parseResult.fold(
+                onSuccess = { quiz ->
+                    val quizMode = if (mode == "test") QuizMode.TEST else QuizMode.PRACTICE
+                    startQuiz(quiz, quizMode)
+                    quizRepository.recordPlay(quizId)
+                    _quizLoaded.value = true
+                },
+                onFailure = { e ->
+                    _loadError.value = "Failed to parse quiz: ${e.message}"
+                },
+            )
+        }
+    }
+
+    fun loadQuizForSetup(quizId: String) {
+        viewModelScope.launch {
+            val entity = quizRepository.getQuizById(quizId)
+            if (entity == null) {
+                _loadError.value = "Quiz not found"
+                return@launch
+            }
+            QuizParser.parse(entity.jsonContent).fold(
+                onSuccess = { quiz ->
+                    _state.update { it.copy(quiz = quiz) }
+                    _quizLoaded.value = true
+                },
+                onFailure = { e ->
+                    _loadError.value = "Failed to parse quiz: ${e.message}"
+                },
+            )
+        }
+    }
 
     fun startQuiz(quiz: Quiz, mode: QuizMode, shuffleQuestions: Boolean = false, shuffleOptions: Boolean = false) {
         val processedQuiz = if (shuffleQuestions) {
@@ -158,11 +214,29 @@ class QuizPlayerViewModel @Inject constructor() : ViewModel() {
 
         val timeTaken = (System.currentTimeMillis() - currentState.startTimeMs) / 1000
         val quizResult = ScoringEngine.scoreQuiz(currentState.quiz, currentState.answers)
-        _result.value = quizResult.copy(
-            quizId = currentState.quiz.title,
+        val finalResult = quizResult.copy(
+            quizId = currentQuizId ?: currentState.quiz.title,
             timeTakenSeconds = timeTaken,
             completedAt = System.currentTimeMillis(),
         )
+        _result.value = finalResult
+
+        // Save result to database
+        viewModelScope.launch {
+            quizRepository.saveResult(
+                QuizResultEntity(
+                    quizId = currentQuizId ?: "",
+                    quizTitle = finalResult.quizTitle,
+                    totalQuestions = finalResult.totalQuestions,
+                    correctAnswers = finalResult.correctAnswers,
+                    totalPoints = finalResult.totalPoints,
+                    earnedPoints = finalResult.earnedPoints,
+                    percentage = finalResult.percentage,
+                    timeTakenSeconds = timeTaken,
+                    mode = currentState.mode.name.lowercase(),
+                )
+            )
+        }
     }
 
     fun getScoreForQuestion(questionId: String): QuestionScore? {

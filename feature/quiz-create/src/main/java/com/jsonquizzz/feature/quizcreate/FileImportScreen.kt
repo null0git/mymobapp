@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,7 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.jsonquizzz.domain.parser.QuizParser
+import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,13 +46,14 @@ import kotlinx.coroutines.launch
 fun FileImportScreen(
     onQuizCreated: (String) -> Unit = {},
     onBack: () -> Unit = {},
-    onSaveQuiz: (suspend (String) -> Result<String>)? = null,
     modifier: Modifier = Modifier,
+    viewModel: CreateViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     var selectedFileName by remember { mutableStateOf<String?>(null) }
     var fileContent by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var isSaving by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -65,16 +67,8 @@ fun FileImportScreen(
                 inputStream?.close()
                 selectedFileName = uri.lastPathSegment ?: "file.json"
                 fileContent = content
-                error = null
-
-                val result = QuizParser.parse(content)
-                result.fold(
-                    onSuccess = { quiz ->
-                        val errors = QuizParser.validate(quiz)
-                        if (errors.isNotEmpty()) error = errors.first()
-                    },
-                    onFailure = { e -> error = "Invalid JSON: ${e.message}" },
-                )
+                val errors = viewModel.validateJson(content)
+                error = if (errors.isNotEmpty()) errors.first() else null
             } catch (e: Exception) {
                 error = "Failed to read file: ${e.message}"
             }
@@ -155,24 +149,36 @@ fun FileImportScreen(
 
             Button(
                 onClick = {
-                    if (fileContent != null && error == null && onSaveQuiz != null) {
+                    if (fileContent != null && error == null) {
+                        isSaving = true
                         scope.launch {
-                            onSaveQuiz(fileContent!!).fold(
+                            viewModel.saveQuiz(fileContent!!).fold(
                                 onSuccess = { id ->
+                                    isSaving = false
                                     snackbarHostState.showSnackbar("Quiz imported!")
                                     onQuizCreated(id)
                                 },
                                 onFailure = { e ->
+                                    isSaving = false
                                     snackbarHostState.showSnackbar("Error: ${e.message}")
                                 },
                             )
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                enabled = fileContent != null && error == null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                enabled = fileContent != null && error == null && !isSaving,
             ) {
-                Text("Import & Save")
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Text("Import & Save")
+                }
             }
         }
     }

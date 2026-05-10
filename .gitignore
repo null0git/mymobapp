@@ -17,3 +17,4 @@ local.properties
 *.tmp
 *.bak
 .kotlin
+release-keystore.jks
