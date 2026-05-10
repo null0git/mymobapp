@@ -1,8 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#FF1565C0</color>
-    <color name="primary_dark">#FF0D47A1</color>
-    <color name="accent">#FF26A69A</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="black">#FF000000</color>
+    <!-- Primary -->
+    <color name="primary">#6366F1</color>
+    <color name="primary_foreground">#FFFFFF</color>
+
+    <!-- Secondary -->
+    <color name="secondary">#F1F5F9</color>
+    <color name="secondary_foreground">#0F172A</color>
+
+    <!-- Background -->
+    <color name="background">#FFFFFF</color>
+    <color name="foreground">#0F172A</color>
+
+    <!-- Destructive -->
+    <color name="destructive">#EF4444</color>
+
+    <!-- Success -->
+    <color name="success">#22C55E</color>
+
+    <!-- Warning -->
+    <color name="warning">#F59E0B</color>
+
+    <!-- Border -->
+    <color name="border">#E2E8F0</color>
 </resources>
